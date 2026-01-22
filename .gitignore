@@ -1,0 +1,95 @@
+############################
+# OS / Editor junk
+############################
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+############################
+# Python (Backend)
+############################
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+############################
+# Environment variables / secrets
+############################
+.env
+.env.*
+*.env
+
+# API keys (extra safety)
+**/secrets/
+**/keys/
+
+############################
+# Vector DB / ML artifacts
+############################
+# Local FAISS or embeddings (if used during dev)
+faiss_index/
+vector_store/
+embeddings/
+
+# Model caches
+.cache/
+.huggingface/
+torch_cache/
+
+############################
+# Logs
+############################
+logs/
+*.log
+
+############################
+# React (Frontend)
+############################
+# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+
+# React environment files
+frontend/.env
+frontend/.env.*
+
+############################
+# Package manager locks (choose ONE)
+############################
+# If using npm
+# package-lock.json
+
+# If using yarn
+# yarn.lock
+
+# If using pnpm
+# pnpm-lock.yaml
+
+############################
+# Misc
+############################
+tmp/
+temp/
