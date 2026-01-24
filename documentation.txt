@@ -1,0 +1,3285 @@
+FORMAT: 1A
+HOST: https://cabs-partners-staging.makemytrip.com/tracking/pp2
+
+# GO-MMT Cabs API Partner Documentation
+
+Welcome to GO-MMT Cabs API Documentation.
+This documentation is designed to guide developers in integrating and interacting with our API seamlessly. Whether you are a seasoned developer or just getting started, this documentation will provide you with the necessary information to leverage the full potential of our API.
+
+#Getting Started
+
+
+To start integrating with our Cabs Booking API, follow these steps:
+
+*Explore Endpoints*: Familiarize yourself with the available Endpoints to understand how to interact with the API.
+
+*Integration*: Utilize the provided Code Samples and Integration Guide to seamlessly integrate the API into your platform.
+
+#Authentication
+Authentication with our API is done using API keys. Ensure secure access to our services by including your API key in the header of your requests. We support only basic Auth method, ensure to develop according to this authentication.
+
+#API Base URL
+The base URL for all API endpoints is : 
+
+```https://cabs-partners-staging.makemytrip.com/tracking/pp2``` (Staging)
+
++ Pre-booking API's ( These are the API's which partners would be developing and MMT cabs would be invoking) need to be provided by the partner's end for integration with the following APIs:
+    + [Search](/reference/normal-booking-flow/search) 
+    + [Block](/reference/normal-booking-flow/block)
+    + [Paid](/reference/normal-booking-flow/paid)
+    + [Cancel](/reference/normal-booking-flow/cancel)
+    + [Booking details](/reference/normal-booking-flow/booking-details)
+    
++ Post-booking API's ( These are the API's which MMT has developed and Partners would be invoking) is required from the partner's end, and the events should be triggered by calling MMT Cabs APIs.
+    + [Detach trip](reference/inventory-details/detach-trip)
+    + [Assign Chauffeur](reference/inventory-details/assign-chauffeur)
+    + [Reassign Chauffeur](reference/inventory-details/reassign-chauffeur)
+    + [Start](reference/tracking-events/start)
+    + [Arrived](reference/tracking-events/arrived)
+    + [Pickup (Boarded)](reference/tracking-events/pickup)
+    + [Alight](reference/tracking-events/alight)
+    + [Not Boarded](reference/tracking-events/not-boarded)
+    + [Update Location](reference/tracking-events/update-location)
+    + [Add Payment Collected In Cash (add_payment)](reference/payment-apis)
+
+# Group Normal Booking Flow
+
+## API Flowchart
+
+This section illustrates the flowchart for the API interactions, outlining the key steps and decision points involved in making successful requests. Review the diagram below to gain a visual understanding of the API workflow.
+
+
+
+<a href="https://ibb.co/tm0F7nG"><img src="https://i.ibb.co/r7BNCqj/MMT-Booking-Flow-pdf.jpg" alt="MMT-Booking-Flow-pdf" border="0"></a>
+
+
+## Search [/partnersearchendpoint]
+
+Search API empower partners to integrate and transmit real-time fare information and inventory details. By utilizing the source and destination, along with other search parameters, the API is designed to provide comprehensive information on fare structures and SKU details.
+
+
++ The ```source``` and ```destination``` Objects will be unique, signifying the customer's starting and ending points in a search request, complemented by latitude and longitude coordinates, along with the full address details
++ Current Search Tags include the following options, and multiple tags can be selected simultaneously
+    
+    + ```B2C```: Search initiated by Customer
+    + ```B2B```: Search initiated by Business Partner
+    + ```PB```: Search for provisional booking
+    + ```FF```: Search for Flight Funnel booking
+    + ```CO```: Search for Corporate
+   
+
++ ```zero_payment``` flag should be true if the cab can be booked without any payment upfront (optional).
++ ```is_instant_search``` (optional)
++ ```search_tags``` will help to decide business logic and pricing at partner side
++ ```corporate_id``` will help to choose different pricing basis on the different corporates, applicable for corporate bookings only (optional)
++ ```airport_tags``` will help in indentifying if the ongoing search is of airport drop or airport pickup or others. It can include either of the given tags (optional)
+    + ```AP```: Airport pickup(source is of airport location)
+    + ```AD```: Airport Drop(destination is of airport location)
++ ```expressway_distance``` will help in charging expressway route as seperate add-on
++ ```expressway_duration``` will help in charging expressway route as seperate add-on
++ ```basic_trip_type```  can be airport or outstation or train
+     + ```AIRPORT```: source/destination is of airport location
+    + ```OUTSTATION```: source/destination is of different city location
+    + ```TRAIN```: source/destination is of railway station location
+
+    
+
+    
++ ```train_type``` will help in indentifying if the ongoing search is of Railway Station drop or Railway Station pickup or others. It can include either of the given tags (optional)
+    + ```PICKUP```: Railway Station  pickup(source is of Railway Station location)
+    + ```DROP```: Railway Station Drop(destination is of Railway Station location)    
+    
++ Search Start Time/Instant Logic
+    + In request we send two fields, is_instant_search and start_time. If instant_search is true you can ignore start_time and assume it’s an instant search otherwise it is scheduled
+The response has 3 fields
+        + is_instant_search: This means that the current search results are for instant inventory. If this flag is true we will ignore start_time field if present
+        + is_instant_available: This just means that instant is available for this particular source or direction. This does not mean that the current search is instant or not ie it is completely unrelated to the current search
+        + start_time: If the search is not instant this field will denote the time for which you have inventory
++ Options for Car Types
+    + ```type```: hatchback/sedan/suv/compactsuv/tempotraveller (values are case sensitive)
+    + ```subcategory```: basic/plus/premium
+    + ```combustion_type```: Petrol/Diesel/Electric/CNG
+    + ```make_year_type```: Newer/Older
+    - `model`: Specific car model  
+  > **Note:** Model names are **case-sensitive**.  
+  > Allowed values: `Dzire`, `Etios`, `Innova`, `InnovaCrysta`, `Ertiga`, `Tata Tigor`, `BYD E6`,`BYD eMax 7`,`MG ZS`, `Toyota Innova HyCross`, `Citroen EC3`, `Mercedes Benz E-class`, `Nexon`, `XUV400`,`Urban Cruiser Hyryder`,`Creta`
++ Options for Travel Add Ons
+    + ```name```: CARRIER/PET_FRIENDLY/BABY_SEATS/LANGUAGES/MEET_AND_GREET
++ Options for Communication Type/Verification Type
+    + Communication Type: This drives how driver/vehicle details are shared to the customer
+        + PRE: Driver/Vehicle details would be sent to MMT, some time before start time
+        + KIOSK: Customer has to go to Kiosk counter to get the driver/vehicle details
+    + Verification Type: This drives how the customer is verified with the driver
+        + OTP: A numeric OTP to be used. If MMT generates it would be 4 digit
+        + QR: An alphanumeric string will be shared to the user. A QR code for the same will alos be shared in the voucher. If MMT generates it's length would be 6
+        + NA: No method for verification used
++ Cancellation Rule: This determines type of cancellation policy applicable for that SKU.
+    + SUPER_FLEXI:
+        + Free cancellation up till 1 hr before start time
+        + No refund post 1 hr before start time
+    + FLEXI:
+        + Free cancellation up till 6 hours of start time
+        + From 6 hrs to 1 hr before start time penalty of 50% of booking amount or Rs 1000 whichever is lower
+No refund post 1 hr before start time
+
++ For Round_trip :
+    + Distance Booked:
+        + Minimum 2 × one-way distance (applies regardless of the number of days)
+        + For trips lasting more than 2 days: 250 km × number of days
+
+    + Total Driver Charges:
+        + Number of days × per-day driver charge
+
++ Make year & Make year type
+    + Make year is supposed to have non-null integer value only when make year type is not unknown
+    + If you want to send make year as 2017,2018, etc then make_year_type field is expected to have “Newer” or “Older” value
++ Extra Charges
+    + Fields
+        + Mandatory Fields: base_fare, per_km_extra_charge, per_km_charge, night_charges, toll_charges, extra_time_fare.rate, extra_time_fare.applicable_time.
+        + Abbrevations:
+          + ST: State Tax
+          + NC: Night charges
+          + TOLL: Toll charges
+          + PC : Parking charges
+          + AE : Airport Entry Fee
+          + SE : Station Entry Fee
+        + ```is_applicable``` : whether this charge is applicable for this search
+        + ```is_included_in_base_fare``` : whether this amount included in base_fare, if yes then it will not be added separately to base amount to compute the total amount  
+        + ```is_included_in_grand_total``` : whether this amount included in total fare
+        + ```amount```: this will be used if it is not included in base fare but in total fare. Then the amount would be added to the base fare to generate the total fare payable
+    
+    + Logic
+        + So first we will check is_applicable flag, if it is false we will just ignore this charge ie it is not applicable for this price 
+        + If is_applicable is true then we will check for the base_fare and grand_total flags. If both are false then we will not include the amount in the total fare and it will be shown to the customer as exlusions (ie to be paid on actuals at the end of the trip).
+        + If is_included_in_base_fare is true then amount is already present in base_fare and hence not added separately in total fare.
+        + If is_included_in_base_fare is false and is_included_in_grand_total is true then the amount field is used to add the charge separately in the total fare
+        + [NOTE] Exclusive pricing not allowed on airport routes 
+        
+    + Waiting Charges Logic
+        + If is_applicable is true, only then waiting charges should be applied. 
+        + Ex : After 45 minutes of free waiting time, a charge of 100 INR will be applied for every subsequent 30 minutes.
+        + Note : amount, free_waiting_time & applicable_time can vary based on trip type. Also free_waiting_time & applicable_time are in mins and should be integer.
+
+### Search [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Attributes
+        + source (object)
+            + address (string, required)
+            + latitude (number, required)
+            + longitude (number, required)
+        + destination
+            + address (string, required)
+            + latitude (number, required)
+            + longitude (number, required)
+        + trip_type (enum, required)
+            + ONE_WAY
+            + ROUND_TRIP
+        + start_time (string, optional)
+        + end_time (string, optional)
+        + search_id (string, optional)
+        + vendor_id (string, optional)
+        + partner_name (string, required)
+        + search_tags (array, required)
+            
+            + B2C: Search initiated by Customer
+            + B2B: Search initiated by Business Partner
+            + PB: Search for provisional booking
+            + FF: Search for Flight Funnel booking
+            + CO: Search for Corporate
+            
+        + one_way_distance (number, required) - it will be integer
+        + package_distance (number, optional) - it will be integer. will be sent if package distance is applicable
+        + is_instant_search (boolean, optional)
+        + corporate_id (string, optional)
+        + stopovers (array, optional)
+            + (object)
+                + address (string, required)
+                + latitude (number, required)
+                + longitude (number, required)
+        + mandatory_inclusions (array, optional)
+            + NC: Night_charges
+            + PC: Parking_charges
+            + TOLL: Toll_charge
+            + AE: Airport_entry_fee
+            + ST: State_tax
+            + SE: station_entry_fee
+            
+        + mandatory_exclusions (array, optional)
+        + trip_type_details (object, optional)
+            + basic_trip_type: can be airport or outstation or train
+            + airport_type:   if basic trip type is airport then either pickup or drop
+            + train_type: if basic trip type is train then either pickup or drop
+              
+    + Body
+
+            {
+                "source": {
+                    "address": "DLF Place, Gurgaon, Haryana, India",
+                    "latitude": 28.48968,
+                    "longitude": 77.09224,
+                    "city":"Gurgaon"
+                },
+                "destination": {
+                    "address": "Jaipur, Rajasthan, India",
+                    "latitude": 26.91243,
+                    "longitude": 75.78727,
+                    "city":"Jaipur"
+                },
+                "trip_type": "ONE_WAY/ROUND_TRIP",
+                "start_time": "2021-02-08 19:55:00",
+                "end_time": "2021-02-08 20:55:00",
+                "search_id": "56c5c8a269702d3a1b0b0000",
+                "vendor_id": "PARTNER_CODE",
+                "partner_name": "GOMMT",
+                "search_tags": ["B2C", "PB", "B2B", "FF", "CO"],
+                "one_way_distance": 230,
+                "is_instant_search": false,
+                "corporate_id": "6c5c8a2697_string_id",
+                "stopovers": [{
+                    "address": "DLF Place, Gurgaon, Haryana, India",
+                    "latitude": 28.48968,
+                    "longitude": 77.09224
+                }],
+                "mandatory_inclusions": ['AE', 'ST', 'TOLL', 'NC', 'PC', 'SE'],
+                "mandatory_exclusions": [],
+                "trip_type_details": {
+                    "basic_trip_type": "OUTSTATION/TRAIN/AIRPORT",
+                    "airport_type": "NONE"
+                    "train_type":"NONE/PICKUP/DROP"
+                },
+                "expressway_distance":144,
+                "expressway_duration":156
+            }
+
+
++ Response 200 (application/json)
+
+    + Attributes (object)
+        + response
+            + distance_booked (number, required) - It will be Integer
+            + is_instant_search (boolean, optional)
+            + is_instant_available (boolean, optional)
+            + start_time (string, required) - time format should be yyyy-mm-dd hh:mm:ss
+            + is_part_payment_allowed (boolean, optional) - if partial payment is allowed
+            + communication_type (enum, required)
+                + PRE - Driver/Vehicle details would be sent to MMT, some time before start time
+                + KIOSK - Customer has to go to Kiosk counter to get the driver/vehicle details
+            + verification_type (enum, required)
+                + OTP - A numeric OTP to be used. If MMT generates it would be 4 digit
+                + QR - An alphanumeric string will be shared to the user. A QR code for the same will alos be shared in the voucher. If MMT generates it's length would be 6
+                + NA - No method for verification used
+            + airport_tags (array, optional)
+                + AD - Airport Drop
+                + AP - Airport Pickup
+            + car_types (array)
+                + (object)
+                    + sku_id (string, optional)
+                    + type (enum, required)
+                        + hatchback
+                        + sedan
+                        + suv
+                        + minivan
+                        + minibus
+                    + subcategory (enum, optional)
+                        + basic 
+                        + plus
+                        + premium
+                    + combustion_type (enum, optional)
+                        + Petrol
+                        + Diesel
+                        + Electric
+                        + CNG
+                        + Unknown - default
+                    + model (enum, optional)
+                        + Swift
+                        + WagonR
+                        + Indica
+                        + Dzire
+                        + Etios
+                        + City
+                        + Innova
+                        + InnovaCrysta
+                        + Ertiga
+                        + Xylo
+                        + XUV
+                        + Unknown - default
+                    + carrier (boolean, optional)
+                    + make_year_type (enum, optional)
+                        + Newer
+                        + Older
+                        + Unknown - default
+                    + make_year (number, optional) - It will be Integer
+                    + flags (array)
+                        + CS - Covid safe
+                        + GRT - Guaranteed Return Trip
+                        + RYD - RYDE inventory
+                    + cancellation_rule (string, optional)
+                    + min_payment_percentage (number, optional) - It will be Integer
+                    + foid (string, optional)
+                    + carName (string, optional)
+                    + fleet_owner_id (string, optional)
+                    + fleet_owner_name (string, optional)
+                    + amenities (object)
+                        + features (object)
+                            + vehicle (array)
+                                + NEWSPAPER,
+                                + WATER_BOTTLE
+                                + WET_TISSUES
+                                + SANITISER
+                                + WIFI
+                                + SNACK_BOX
+                                + BABY_SEAT
+                                + CAR_FRESHNER
+                                + TISSUE_BOX
+                                + USB_CHARGER
+                            + driver (array)
+                                + UNIFORM
+                                + MULTI_LINGUAL
+                                + ROUTE_EXPERT
+                            + services (array)
+                                + PLACARD
+                    + travel_add_ons (object)
+                        + name (string)
+                        + value (string, optional)
+                        + price (number) - It will be Integer
+                    + pax_capacity (number, optional)
+                    + luggage_capacity (number, optional)
+                    + fare_details (object)
+                        + grand_total (number, optional) - It will be Integer
+                        + base_fare (number, required) - It will be Integer
+                        + per_km_charge (number, required) - It can be double. It will be charged before the trip to calculate base fare if distance booked is less than one way distance sent by us. This means that this amount will be charged per km if the distance booked sent by partner is lesser. The updated distance booked and base fare would be sent to the partner in block API
+                        + per_km_extra_charge (number, required) - It can be double. This will shown to the customer as per km extra charge if they travel more than
+                        + driver_charge_per_day (number, optional) - It will be Integer
+                        + total_days_charged (number, optional) - It will be Integer
+                        + min_km_per_day (number, optional) - It will be Integer
+                        
+                        + total_driver_charges (number, optional) - It will be Integer
+                        + seller_discount (number, optional) - It will be Integer
+                        
+                        
+                        
+                        + extra_charges (object)
+                            + night_charges (object, optional) 
+                                + amount (number, required)  
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + applicable_time_from (number, required) - hrs in 24 hr format (integer)
+                                + applicable_time_till (number, required) -  hrs in 24 hr format (integer)
+                                + is_applicable (boolean, required) 
+                                
+                            + toll_charges (object, optional)
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + is_applicable (boolean, required)   
+                            
+                            + state_tax (object, optional)
+                                + amount (number, required) - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + is_applicable (boolean, required)
+                                
+                            + parking_charges (object, optional)
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + is_applicable (boolean, required)
+                            
+                            + airport_entry_fee (object, optional)
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + is_applicable (boolean, required)
+                            
+                            + waiting_charges (object, optional)
+                                + amount (number, required)   - It will be Integer
+                                + free_waiting_time (number, required) - in mins (integer)
+                                + applicable_time (number,required) - in mins (integer)
+                                + is_applicable (boolean, required)
+                                
+                            + service_charges (object, optional)
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                
+                            + convenience_charges (object, optional)   
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                            
+                            + airport_toll (object, optional) 
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + is_applicable (boolean, required)
+                            + station_entry_fee (object, optional)
+                                + amount (number, required)  - It will be Integer
+                                + is_included_in_base_fare (boolean, required)
+                                + is_included_in_grand_total (boolean, required)
+                                + is_applicable (boolean, required)                               
+
+                            
+        + error (string, optional)
+        + code (enum, optional) - will be required in case of error response
+            + PARTNER_SEARCH_DEF 
+            + PARTNER_SEARCH_INVALID_TIME - If arrival or departure time is invalid from the request
+            + PARTNER_SEARCH_INVALID_DISTANCE
+            + PARTNER_SEARCH_INVALID_LOCATION - If A A location/city/are not found
+            + PARTNER_SEARCH_INVENTORY_UNAVAILABLE - If inventory is expired or unavialable
+            + PARTNER_SEARCH_INVALID_TRIPTYPE - If trip type is invalid like airport pickup, drop
+            + PARTNER_SEARCH_INVALID_PACKAGE - iIn case provided package is not supported or invalid
+            + PARTNER_SEARCH_SERVER_ERROR - Any api error occured due to server's fault
+            + PARTNER_SEARCH_INVALID_TRIPTYPE - If trip type is invalid like airport pickup, drop
+            + PARTNER_SEARCH_INVALID_TYPE - If a car type is invalid
+            + PARTNER_SEARCH_FARE_NOT_AVAILABLE - If fare are not available for the inventory/booking
+            + PARTNER_SEARCH_DATA_NOT_FOUND - If data is not found/available for the request
+            + PARTNER_SEARCH_INVALID_REQUEST - If any flag/field is not supported or allowed
+            + PARTNER_SEARCH_DUPLICATE_DATA - If a data is alreay exists or duplicate search
+            + PARTNER_SEARCH_INVALID_PACKAGE - If provide package is not supported or invalid
+            
+    
+    + Body
+    
+            {
+                "response": {
+                    "distance_booked": 900,
+                    "is_instant_search": false,
+                    "is_instant_available": true,
+                    "start_time": "2021-02-15 19:55:00",
+                    "is_part_payment_allowed": true,
+                    "communication_type": "PRE/KIOSK",
+                    "verification_type": "OTP/QR/NA",
+                    "airport_tags": ["AD"],
+                    "car_types": [
+                        {
+                            "sku_id": "A1234423d",
+                            "type": "hatchback",
+                            "subcategory": "basic",
+                            "combustion_type":"Electric",
+                            "model": "Unknown",
+                            "carrier": true,
+                            "make_year_type": "Unknown",
+                            "make_year": 2017,
+                            "cancellation_rule": "SUPER_FLEXI",
+                            "zero_payment" : true,// Only in case of Zero payment flow//
+                            "min_payment_percentage": 20,
+                            "amenities":{
+                                "features": {
+                                    "vehicle": ["NEWSPAPER", "WATER_BOTTLE", "WET_TISSUES", "TISSUE_BOX", "SANITISER", "WIFI", "SNACK_BOX", "BABY_SEAT", "CAR_FRESHNER", "USB_CHARGER"],
+                                    "driver": ["UNIFORM", "MULTI_LINGUAL", "ROUTE_EXPERT"],
+                                    "services": ["PLACARD"]
+                                }
+                            },
+                            "travel_add_ons": [
+                                {
+                                    "name": "BABY_SEATS",
+                                    "value": null,
+                                    "price": 100
+                                },
+                                {
+                                    "name": "LANGUAGES",
+                                    "value": "Hindi,English",
+                                    "price": 100
+                                },
+                                {
+                                    "name": "MEET_AND_GREET",
+                                    "value": null,
+                                    "price": 100
+                                }
+                            ],
+                            "pax_capacity": 2,
+                            "luggage_capacity": 2,
+                            "fare_details": {
+                                "base_fare": 2010,
+                                "per_km_charge": 20,
+                                "per_km_extra_charge": 10,
+                                "extra_time_fare": {
+                                        "rate": 100,
+                                        "applicable_time": 30
+                                },
+                                "total_driver_charges": 0,
+                                "seller_discount": 400,
+                                "extra_charges": {
+                                    "night_charges": {
+                                        "amount": 250,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "applicable_time_from": 21,
+                                        "applicable_time_till": 6,
+                                        "is_applicable": true
+                                    },
+                                    "toll_charges": {
+                                        "amount": 100,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "state_tax": {
+                                        "amount": 300,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "parking_charges": {
+                                        "amount": 150,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "waiting_charges": {
+                                        "amount": 100,
+                                        "free_waiting_time": 45,
+                                        "applicable_time": 30,
+                                        "is_applicable": true
+                                    },
+                                    "airport_entry_fee": {
+                                        "amount": 300,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    }
+                                }
+                            },
+                            "expressway_fare_details": {
+                                "per_km_charge": 21.75,
+                                "extra_toll_charge": 293
+                            }
+                        },
+                        {
+                            "sku_id": "A1GF423d",
+                            "type": "sedan",
+                            "subcategory": "basic",
+                            "combustion_type":"Unknown",
+                            "model": "Unknown",
+                            "carrier": true,
+                            "make_year_type": "Unknown",
+                            "make_year": 2017,
+                            "flags": ["GRT"],
+                            "cancellation_rule": "FLEXI",
+                            "zero_payment" : true,// Only in case of Zero payment flow//
+                            "min_payment_percentage": 20,
+                            "amenities":{
+                                "features": {
+                                    "vehicle": ["NEWSPAPER", "WATER_BOTTLE", "WET_TISSUES", "TISSUE_BOX", "SANITISER", "WIFI", "SNACK_BOX", "BABY_SEAT", "CAR_FRESHNER", "USB_CHARGER"],
+                                    "driver": ["UNIFORM", "MULTI_LINGUAL", "ROUTE_EXPERT"],
+                                    "services": ["PLACARD"]
+                                }
+                            },
+                            "travel_add_ons": [
+                                {
+                                    "name": "CARRIER",
+                                    "value": null,
+                                    "price": 100
+                                },
+                                {
+                                    "name": "LANGUAGES",
+                                    "value": "Hindi,English",
+                                    "price": 100
+                                }
+                            ],
+                            "fare_details": {
+                                "base_fare": 2110,
+                                "per_km_charge": 20,
+                                "per_km_extra_charge": 20,
+                                "total_driver_charges": 0,
+                                "seller_discount": 400,
+                                "extra_charges": {
+                                    "night_charges": {
+                                        "amount": 250,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": false,
+                                        "applicable_time_from": 21,
+                                        "applicable_time_till": 6,
+                                        "is_applicable": false
+                                    },
+                                    "toll_charges": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "state_tax": {
+                                        "amount": 300,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "parking_charges": {
+                                        "amount": 150,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_toll": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true
+                                    },
+                                    "airport_entry_fee": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "waiting_charges": {
+                                        "amount": 100,
+                                        "free_waiting_time": 45,
+                                        "applicable_time": 30,
+                                        "is_applicable": true
+                                    },
+                                }
+                            },
+                            "expressway_fare_details": {
+                                "per_km_charge": 21.75,
+                                "extra_toll_charge": 293
+                            }                            
+                        },
+                        {
+                            "type": "suv",
+                            "subcategory": "basic",
+                            "combustion_type":"Petrol",
+                            "model": "Swift",
+                            "carrier": true,
+                            "make_year_type": "Older",
+                            "make_year": 2017,
+                            "flags": ["CS", "NRYD"],
+                            "cancellation_rule": "FLEXI",
+                            "zero_payment" : true,// Only in case of Zero payment flow//
+                            "min_payment_percentage": 20,
+                            "amenities":{
+                                "features": {
+                                    "vehicle": ["NEWSPAPER", "WATER_BOTTLE", "WET_TISSUES", "TISSUE_BOX", "SANITISER", "WIFI", "SNACK_BOX", "BABY_SEAT", "CAR_FRESHNER", "USB_CHARGER"],
+                                    "driver": ["UNIFORM", "MULTI_LINGUAL", "ROUTE_EXPERT"],
+                                    "services": ["PLACARD"]
+                                }
+                            },
+                            "travel_add_ons": [
+                                {
+                                    "name": "CARRIER",
+                                    "value": null,
+                                    "price": 100
+                                },
+                                {
+                                    "name": "LANGUAGES",
+                                    "value": "Hindi,English",
+                                    "price": 100
+                                }
+                            ],
+                            "fare_details": {
+                                "base_fare": 2510,
+                                "per_km_charge": 20,
+                                "per_km_extra_charge": 20,
+                                "total_driver_charges": 0,
+                                "seller_discount": 400,
+                                "extra_charges": {
+                                    "night_charges": {
+                                        "amount": 250,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": false,
+                                        "applicable_time_from": 21,
+                                        "applicable_time_till": 6,
+                                        "is_applicable": true
+                                    },
+                                    "toll_charges": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "state_tax": {
+                                        "amount": 300,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "parking_charges": {
+                                        "amount": 150,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_toll": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_entry_fee": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "waiting_charges": {
+                                        "amount": 100,
+                                        "free_waiting_time": 45,
+                                        "applicable_time": 30,
+                                        "is_applicable": true
+                                    },
+                                }
+                            },
+                            "expressway_fare_details": {
+                                "per_km_charge": 21.75,
+                                "extra_toll_charge": 293
+                            }                            
+                        },
+                        {
+                            "type": "minivan",
+                            "subcategory": "basic",
+                            "combustion_type":"Petrol",
+                            "model": "Unknown",
+                            "carrier": true,
+                            "make_year_type": "Older",
+                            "make_year": 2017,
+                            "flags": ["CS", "NRYD"],
+                            "cancellation_rule": "FLEXI",
+                            "zero_payment" : true,// Only in case of Zero payment flow//
+                            "min_payment_percentage": 20,
+                            "amenities":{
+                                "features": {
+                                    "vehicle": ["NEWSPAPER", "WATER_BOTTLE", "WET_TISSUES", "TISSUE_BOX", "SANITISER", "WIFI", "SNACK_BOX", "BABY_SEAT", "CAR_FRESHNER", "USB_CHARGER"],
+                                    "driver": ["UNIFORM", "MULTI_LINGUAL", "ROUTE_EXPERT"],
+                                    "services": ["PLACARD"]
+                                }
+                            },
+                            "fare_details": {
+                                "base_fare": 2510,
+                                "per_km_charge": 20,
+                                "per_km_extra_charge": 20,
+                                "total_driver_charges": 0,
+                                "seller_discount": 400,
+                                "extra_charges": {
+                                    "night_charges": {
+                                        "amount": 250,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": false,
+                                        "applicable_time_from": 21,
+                                        "applicable_time_till": 6,
+                                        "is_applicable": true
+                                    },
+                                    "toll_charges": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "state_tax": {
+                                        "amount": 300,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "parking_charges": {
+                                        "amount": 150,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_toll": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_entry_fee": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "waiting_charges": {
+                                        "amount": 100,
+                                        "free_waiting_time": 45,
+                                        "applicable_time": 30,
+                                        "is_applicable": true
+                                    },
+                                }
+                            },
+                            "expressway_fare_details": {
+                                "per_km_charge": 21.75,
+                                "extra_toll_charge": 293
+                            }                             
+                        },
+                        {
+                            "type": "minibus",
+                            "subcategory": "basic",
+                            "combustion_type":"Petrol",
+                            "model": "Unknown",
+                            "carrier": true,
+                            "make_year_type": "Older",
+                            "make_year": 2017,
+                            "flags": [],
+                            "cancellation_rule": "FLEXI",
+                            "zero_payment" : true,// Only in case of Zero payment flow//
+                            "min_payment_percentage": 20,
+                            "amenities":{
+                                "features": {
+                                    "vehicle": ["NEWSPAPER", "WATER_BOTTLE", "WET_TISSUES", "TISSUE_BOX", "SANITISER", "WIFI", "SNACK_BOX", "BABY_SEAT", "CAR_FRESHNER", "USB_CHARGER"],
+                                    "driver": ["UNIFORM", "MULTI_LINGUAL", "ROUTE_EXPERT"],
+                                    "services": ["PLACARD"]
+                                }
+                            },
+                            "travel_add_ons": [
+                                {
+                                    "name": "CARRIER",
+                                    "value": null,
+                                    "price": 100
+                                },
+                                {
+                                    "name": "LANGUAGES",
+                                    "value": "Hindi,English",
+                                    "price": 100
+                                }
+                            ],
+                            "fare_details": {
+                                "base_fare": 2510,
+                                "per_km_charge": 20,
+                                "per_km_extra_charge": 20,
+                                "total_driver_charges": 0,
+                                "seller_discount": 400,
+                                "extra_charges": {
+                                    "night_charges": {
+                                        "amount": 250,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": false,
+                                        "applicable_time_from": 21,
+                                        "applicable_time_till": 6,
+                                        "is_applicable": true
+                                    },
+                                    "toll_charges": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "state_tax": {
+                                        "amount": 300,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "parking_charges": {
+                                        "amount": 150,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_toll": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "airport_entry_fee": {
+                                        "amount": 0,
+                                        "is_included_in_base_fare": false,
+                                        "is_included_in_grand_total": true,
+                                        "is_applicable": true
+                                    },
+                                    "waiting_charges": {
+                                        "amount": 100,
+                                        "free_waiting_time": 45,
+                                        "applicable_time": 30,
+                                        "is_applicable": true
+                                    },
+                                }
+                            },
+                            "expressway_fare_details": {
+                                "per_km_charge": 21.75,
+                                "extra_toll_charge": 293
+                            }                             
+                        }
+                    ]
+                }
+            }    
+                            
+    
+
++ Response 404 (application/json)
+
+            {
+               "code":"PARTNER_SEARCH_INVALID_TIME",
+               "error":"Any relevant error message string",
+               "response":null
+            }
+
+## SearchMarketPlace-B2B [/partnermarketplacesearchendpoint]
+Request change : It works like a normal search, except there’s no search_id. Instead, we pass searches, which is an array of objects containing the search_id and its corresponding supplier_id mapping.
+
+Response Change : Supplier responses are grouped together and delivered in one array called partner_data. Each entry in this array contains the response for an individual search.
+
+Example:
+
+partner_data: [
+  { search1 response },
+  { search2 response }
+]
+
+### SearchMarketPlace [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+
+              
+    + Body
+
+            {"source":{"address":"Manavsthali Apartment, Vasundhara Enclave, Delhi, India","latitude":28.5985451,"longitude":77.3212248,"city":"Noida"},"stopovers":[],"trip_type":"LOCAL_RENTAL","start_time":"2025-11-21 19:30:00","end_time":"2025-11-21 21:30:00","partner_name":"GOMMT","search_tags":["B2C"],"package_id":"PKG_20_2","mandatory_inclusions":[],"mandatory_exclusions":["NC"],"fare_type":"CONTRACTED","features":"{\"org_id\":\"3\",\"cab_amenity\":{\"cab_amenity_driver_uniform\":true,\"cab_amenity_water_bottle\":true}}","trip_type_details":{"basic_trip_type":"OUTSTATION","airport_type":"NONE"},"searches":[{"supplier_id":"68d38f271efb17006409d2fd","search_id":"69203af4915f320064a45455"},{"supplier_id":"667a21c80441160017f24873","search_id":"69203af4915f320064a45456"},{"supplier_id":"68d38f2804d5ee005d5f6fbd","search_id":"69203af4915f320064a45457"}]}
+
+
++ Response 200 (application/json)
+    
+    + Body
+    
+            {"partner_data":[{"supplier_id":"68d38f271efb17006409d2fd","supplier_name":null,"search_id":"69203af4915f320064a45455","distance_booked":0,"is_instant_search":false,"is_instant_available":false,"start_time":"2025-11-21 19:30:00","is_part_payment_allowed":true,"communication_type":"PRE","verification_type":"OTP","car_types":[{"zero_payment":true,"sku_id":"se854_73149_5553_854_1636","type":"hatchback","subcategory":"basic","combustion_type":"Unknown","make_year":"","make_year_type":"Unknown","model":"Unknown","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"2","luggagebags_allowed":2,"ACAvailable":"yes","fare_details":{"base_fare":300,"per_km_charge":12,"per_km_extra_charge":12,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":140,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f271efb17006409d2fd"},{"zero_payment":true,"sku_id":"se854_73149_5541_854_1636","type":"sedan","subcategory":"basic","combustion_type":"Unknown","make_year":"","make_year_type":"Unknown","model":"Unknown","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"4","luggagebags_allowed":6,"ACAvailable":"yes","fare_details":{"base_fare":300,"per_km_charge":12,"per_km_extra_charge":12,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":140,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f271efb17006409d2fd"}]},{"supplier_id":"68d38f2804d5ee005d5f6fbd","supplier_name":null,"search_id":"69203af4915f320064a45457","distance_booked":0,"is_instant_search":false,"is_instant_available":false,"start_time":"2025-11-21 19:30:00","is_part_payment_allowed":true,"communication_type":"PRE","verification_type":"OTP","car_types":[{"zero_payment":true,"sku_id":"se883_152869_5541_883_1636","type":"sedan","subcategory":"basic","combustion_type":"Unknown","make_year":"","make_year_type":"Unknown","model":"Unknown","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"4","luggagebags_allowed":6,"ACAvailable":"yes","fare_details":{"base_fare":2500,"per_km_charge":50,"per_km_extra_charge":50,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":50,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f2804d5ee005d5f6fbd"},{"zero_payment":true,"sku_id":"se883_152869_5542_883_1636","type":"suv","subcategory":"basic","combustion_type":"Unknown","make_year":"","make_year_type":"Unknown","model":"Unknown","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"4","luggagebags_allowed":7,"ACAvailable":"yes","fare_details":{"base_fare":2500,"per_km_charge":50,"per_km_extra_charge":50,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":50,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f2804d5ee005d5f6fbd"},{"zero_payment":true,"sku_id":"se883_152869_5543_883_1636","type":"muv","subcategory":"basic","combustion_type":"Unknown","make_year":"","make_year_type":"Unknown","model":"Unknown","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"5","luggagebags_allowed":9,"ACAvailable":"yes","fare_details":{"base_fare":2500,"per_km_charge":50,"per_km_extra_charge":50,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":50,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f2804d5ee005d5f6fbd"},{"zero_payment":true,"sku_id":"se883_152869_5553_883_1636","type":"hatchback","subcategory":"basic","combustion_type":"Unknown","make_year":"","make_year_type":"Unknown","model":"Unknown","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"2","luggagebags_allowed":2,"ACAvailable":"yes","fare_details":{"base_fare":2500,"per_km_charge":50,"per_km_extra_charge":50,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":50,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f2804d5ee005d5f6fbd"},{"zero_payment":true,"sku_id":"se883_152869_5663_883_1636","type":"sedan","subcategory":"basic","combustion_type":"CNG","make_year":"","make_year_type":"Unknown","model":"Dzire","cancellation_rule":"SUPER_FLEXI","passengers_allowed":"5","luggagebags_allowed":3,"ACAvailable":"yes","fare_details":{"base_fare":2500,"per_km_charge":50,"per_km_extra_charge":50,"total_driver_charges":0,"extra_charges":{"night_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"applicable_time_from":5,"applicable_time_till":5,"is_applicable":true},"toll_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"state_tax":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"parking_charges":{"amount":0,"is_included_in_base_fare":false,"is_included_in_grand_total":false,"is_applicable":true},"waiting_charges":{"amount":0,"is_applicable":true,"free_waiting_time":0,"applicable_time":0}},"extra_time_fare":{"rate":50,"applicable_time":60}},"min_payment_percentage":50,"amenities":{"features":{"vehicle":[],"driver":["ROUTE_EXPERT"],"services":[]}},"travel_add_ons":[],"expressway_fare_details":[],"supplier_id":"68d38f2804d5ee005d5f6fbd"}]}]}   
+                            
+    
+
++ Response 404 (application/json)
+
+            {
+               "code":"PARTNER_SEARCH_INVALID_TIME",
+               "error":"Any relevant error message string",
+               "response":null
+            }
+            
+
+## Block [/partnerblockendpoint]
+After receiving fare and SKU details in response to the search, a block is created using the search_id and SKU information associated with the selected customer. The partner is required to soft block the inventory for a specific duration until the payment or confirmation API is called. The search_id is a unique code received in the search request, while SKU is a combination of parameters including type, subcategory, combustion_type, make_year_type, and model.
+
+### Block [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Attributes
+        + distance (number, required)
+        + start_time (string, optional)
+        + end_time (string, optional)
+        + fare_details (object)
+            + base_fare (number, required) - It will be Integer
+            + total_driver_charges (number, optional) - It will be Integer
+            + total_days_charged (number, optional) - It will be Integer
+            + state_tax (number, optional)- It will be Integer
+            + toll_charges (number, optional)- It will be Integer
+            + night_charges (number, optional)- It will be Integer
+            + add_ons_price (number, optional)- It will be Integer
+            + total_fare (number, required) - It will be Integer
+            + partner_offer_applied (object)
+                + type (string, optional)
+                + coupon (string, optional)
+                + amount (number, optional)
+            + airport_entry_fee (number, optional)- It will be Integer
+            + station_entry_fee (number, optional)- It will be Integer
+
+            
+        + selected_add_ons (object)
+            + name (string)
+            + amount (number) It will be Integer
+            + value (string) 
+        + search_id (string, required)
+        + flight_number (string, optional)
+        + vehicle_type (string, required)
+        + vehicle_subcategory (string, required)
+        + vendor_id (string, optional)
+        + partner_name (string, optional)
+        + verification_code (string, required)
+        + vehicle_details (object)
+            + sku_id (string, required)
+            + type (string, required)
+            + subcategory (string, required)
+            + combustion_type (string, required)
+            + model (string, required)
+            + carrier (string, required)
+            + make_year_type (string, required)
+            + make_year (string, required)
+            + cancellation_rule (string, required)
+        + source (object)
+            + address (string, required)
+            + latitude (number, required)
+            + longitude (number, required)
+        + destination
+            + address (string, required)
+            + latitude (number, required)
+            + longitude (number, required)
+        + stopovers (array, optional)
+            + (object)
+                + address (string, required)
+                + latitude (number, required)
+                + longitude (number, required)
+        + trip_type_details (object, optional)
+            + basic_trip_type: can be airport or outstation or train
+            + airport_type:   if basic trip type is airport then either pickup or drop
+            + train_type: if basic trip type is train then either pickup or drop
+
+            
+        
+    + Body
+
+            {
+                "distance": 230,
+                "fare_details": {
+                    "base_fare": 2010,
+                    "total_driver_charges": 0,
+                    "state_tax": 100,
+                    "toll_charges": 100,
+                    "night_charges": 0,
+                    "add_ons_price": 200,
+                    "total_fare": 2410,
+                    "partner_offer_applied": {
+                        "type": "grt",
+                        "coupon": "GRT00",
+                        "amount": 200
+                    },
+                    "airport_entry_fee": 100
+                },
+                "selected_add_ons": [
+                    {
+                        "name": "CARRIER",
+                        "amount": 100
+                    },
+                    {
+                        "name": "LANGUAGES",
+                        "amount": 100,
+                        "Value": "Hindi,English"
+                    }
+                ],
+                "search_id": "56c5c8a269702d3a1b0b0000",
+                "flight_number":"UK187"
+                "vehicle_type": "sedan",
+                "vehicle_subcategory": "basic",
+                "vendor_id": "PARTNER_CODE",
+                "partner_name": "GOMMT",
+                "verification_code": "2748",
+                "vehicle_details": {
+                    "sku_id": "A1234423d",
+                    "type": "hatchback",
+                    "subcategory": "basic",
+                    "combustion_type":"Petrol/Diesel/CNG/Electric/Unknown",
+                    "model": "Swift/i10/Unknown",
+                    "carrier": true,
+                    "make_year_type": "Older/Newer/Unknown",
+                    "make_year": 2017,
+                    "cancellation_rule":"SUPER_FLEXI"
+                },
+                "source": {
+                    "address": "DLF Place, Gurgaon, Haryana, India",
+                    "latitude": 28.48968,
+                    "longitude": 77.09224
+                },
+                "destination": {
+                    "address": "Jaipur, Rajasthan, India",
+                    "latitude": 26.91243,
+                    "longitude": 75.78727
+                },
+                "stopovers": [{
+                    "address": "DLF Place, Gurgaon, Haryana, India",
+                    "latitude": 28.48968,
+                    "longitude": 77.09224
+                }],
+                "trip_type_details": {
+                    "basic_trip_type": "OUTSTATION/TRAIN/AIRPORT",
+                    "airport_type": "NONE"
+                    "train_type":"NONE/PICKUP/DROP"
+                }
+            }
+
++ Response 200 (application/json)
+
+    + Attributes(object)
+        + response
+            + verification_code (string, required)
+            + reference_number (string, required)
+        
+        + error (string, optional)
+        + code (enum, optional) - will be required in case of error responsee
+            + PARTNER_BLOCK_PRICE_CHANGED - Price increase or decrease
+            + PARTNER_BLOCK_TIMEOUT - Server or API timeout
+            + PARTNER_BLOCK_PACKAGE_NOT_VALID - When selected package is not valid
+            + PARTNER_BLOCK_INVENTORY_UNAVAILABLE - When inventory expired or not available
+            + PARTNER_BLOCK_MAXIMUM_REQUEST_REACHED - When for a same searchid maximum number of request recieved
+            + PARTNER_BLOCK_SERVER_ERROR - Any error that occur due to server fault
+            + PARTNER_BLOCK_SYSTEM_ERROR - ERROR DUE TO CODE/QUERY/LOGICAL ERROR
+            + PARTNER_BLOCK_UNAVAILABLE_SLOT - In case slot is not available for a requestt
+            + PARTNER_BLOCK_NOT_SERVICEABLE - If a location/area not serviceable
+    + Body    
+
+            {
+               "response":{
+                    "success": true,
+                    "reference_number": "DL519000019",
+                    "verification_code": "2748"
+               },
+               "error":null,
+               "code":null
+            }
+
++ Response 404 (application/json)
+
+            {
+               "code":"Invalid Reason",
+               "error":"Invalid Reason",
+               "response":null
+            }
+
+## Paid [/partnerpaidendpoint]
+After the customer confirms the payment, the unique partner reference number received in the Block response will be included in the Paid request, along with the unique booking ID (order_reference_number). This request will also contain information about the amount paid by the customer, including fare details such as total_fare and amount_to_be_collected.
+
+### Paid [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Attributes
+        + passenger (object)
+            + name (string, required)
+            + email (string, required)
+            + phone_number (string, required)
+            + country_code (string, optional)
+        + partner_reference_number (string, required)
+        + order_reference_number (string, required)
+        + total_fare (number, required)
+        + amount_to_be_collected (number, required)
+        + platform_fee (number, optional)
+        + booking_gst (number, optional)
+        + vendor_id (string, optional)
+        + partner_name (string, required)
+        + flight_details (object)
+            + flight_number (string, required)
+            + flight_origin_city (string, required)
+            + flight_destination_city (string, required)
+            + scheduled_flight_departure (string, required)
+            + scheduled_flight_arrival (string, required)
+    
+    + Body
+
+            {
+                "passenger": {
+                    "name": "Avikal Kohli",
+                    "email": "avikal_test@gmail.com",
+                    "phone_number": "7665544221",
+                    "country_code": "91"  // Keep it as optional
+                },
+                "partner_reference_number": "DL519000019",
+                "order_reference_number": "NC770346218670301",
+                "total_fare": 2210,
+                "amount_to_be_collected": 200,
+                "platform_fee": 50,  //mmt fee// Only in case of Zero payment flow//
+                "booking_gst": 50,  //will be applicable only if partner is non-ecom else 0// Only in case of Zero payment flow//
+                "vendor_id": "PARTNER_CODE",
+                "partner_name": "GOMMT",
+                "flight_details": {
+                    "flight_number": "IX1116",
+                    "flight_origin_city": "Bengaluru",
+                    "flight_destination_city": "New Delhi",
+                    "scheduled_flight_departure": "2025-09-24T04:30",
+                    "scheduled_flight_arrival": "2025-09-24T07:25"
+                }
+            }
+
++ Response 200 (application/json)
+
+    + Attributes(object)
+        + response
+            + success (boolean, required)
+            
+        + error (string, optional)
+        + code (enum, optional) - will be required in case of error responsee
+            + PARTNER_CONFIRM_SERVER_ERROR - Any error that occur due to server fault
+            + PARTNER_CONFIRM_INVALID_AMOUNT - In case booking amount is incorrect
+            + PARTNER_CONFIRM_DUPLICATE_DATA - If a data is laready exists for a requestt
+            + PARTNER_CONFIRM_INVENTORY_UNAVAILABLE - In case inventory has expired or not available
+            + PARTNER_CONFIRM_INVALID_TIME - If date or time is not valid for a booking
+            + PARTNER_CONFIRM_DATA_NOT_FOUND - In case data is not available for a requestt
+            + PARTNER_CONFIRM_INVALID_USER - If a user in invalid/not authorize
+            + PARTNER_CONFIRM_VEHICLE_NOT_AVAILABLE - If vehicle is not available
+    + Body
+            {
+                "response":{
+                    "success": true,
+                    "trip_url": "https://google.com"
+               },
+               "error":null,
+               "code":null
+            }
+
++ Response 404 (application/json)
+
+            {
+               "code":"Invalid Reason",
+               "error":"Invalid Reason",
+               "response":null
+            }
+
+## Cancel [/partnercancelendpoint]
+In cases of customer-initiated cancellations, the cancel API request will include the unique booking ID (order_reference_number), partner reference number (partner_reference_number), and the reasons for cancellation.
+
+### Cancel [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Attributes
+        + partner_reference_number (string, required)
+        + order_reference_number (string, required)
+        + cancelled_by (string, requried)
+        + cancellation_reason (string, required)
+        + cancelled_at (string, required)
+    
+    + Body
+
+            {
+                "partner_reference_number": "DL519000019",
+                "order_reference_number": "NC770346218670301",
+                "cancelled_by" : "Customer/CRM",
+                "cancellation_reason" : "Change of plans",
+                "cancelled_at" : "2025-10-21T11:18:44.533Z"
+                "vendor_id": "PARTNER_CODE",
+                "partner_name": "GOMMT"
+            }
+
++ Response 200 (application/json)
+
+            {
+               "response":{
+                    "success": true
+               },
+               "error":null,
+               "code":null
+            }
+
++ Response 404 (application/json)
+
+            {
+               "code":"Invalid Reason",
+               "error":"Invalid Reason",
+               "response":null
+            }
+            
+## Customer Landed [/partnercustomerarrivedendpoint]
+### Customer Landed [POST]
+
++ Request
+
+    + Header
+        
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Body
+    
+            {
+                "booking_id": "NC725926968039039426"
+            }
+            
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "success": true
+                },
+                "error":null,
+                "code":null
+            }
+            
++ Response 404 (application/json)
+
+            {
+                "code":"Invalid Reason",
+                "error":"Invalid Reason",
+                "response":null
+            }
+            
+## Booking Details [/api/partner/v1/booking/details?order_reference_number=NCA701853187611566&?partner_reference_number=DL30u1e1349]
+
++ In the event of a failure in the confirm or paid API from the partner's end, a retry is initiated using the booking details API, To fetch the latest booking status.
++ The booking status keys include 
+    + CONFIRMED (booking confirmed at partner's end)
+    + FAILURE (booking failed by the partner with a specific reason provided)
+    + MISSING (no booking with this order number present at the partner's end)
+    + HOLD (booking is currently in a hold state at the partner's end)
+    + CANCELLED (booking has been cancelled at the partner's end)
+    + TRAVELLED (booking has been travelled at the partner's end)
+    + NOT_TRAVELLED (booking has not been travelled at the partner's end)
+
+### Booking Details [GET]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Attributes
+        + partner_reference_number (string, required)
+        + order_reference_number (string, required)
+            
++ Response 200 (application/json)
+
+    + Attributes (object)
+        + response (object)
+            + status: CONFIRMED (enum, required)
+                + CONFIRMED
+                + FAILURE
+                + MISSING
+                + HOLD
+                + CANCELLED
+            + failure_reason: Email ID of user was invalid (string, optional) - This has to be present on if status is FALIURE
+            + reference_number: DL30u1e1349 (string, required)
+            + verification_code: 3476 (string, optional)
+        + error (string, optional) - You can send the error message here
+        + code (string, optional) - You have to send the error code (as specified by MMT team)
+
++ Response 404 (application/json)
+
+        {
+           "code":404,
+           "error":"Invalid Reason",
+           "response":null
+        }
+        
+# Group Rental Booking Flow
+
+Search API empower partners to integrate and transmit real-time fare information and inventory details. By utilizing only the source, along with other search parameters, the API is designed to provide comprehensive information on fare structures and SKU details.
+
+## Search [/partnersearchendpoint]
+
++ The ```source``` Objects will be unique, signifying the customer's starting points in a search request, complemented by ```latitude``` and ```longitude``` coordinates, along with the full address details.
++ Trip_type will be LOCAL_RENTAL, basic_trip_type will be default OUTSTATION and when source is airport, it will come as AIRPORT.
+
++ Package can be identified as follows (sent in search request). Available ```package_id``` are:
+    + PKG_10_1 : {distance: 10, time: 1}
+    + PKG_20_2 : {distance: 20, time: 2}
+    + PKG_30_3 : {distance: 30, time: 3}
+    + PKG_40_4 : {distance: 40, time: 4}
+    + PKG_50_5 : {distance: 50, time: 5}
+    + PKG_60_6 : {distance: 60, time: 6}
+    + PKG_70_7 : {distance: 70, time: 7}
+    + PKG_80_8 : {distance: 80, time: 8}
+    + PKG_90_9 : {distance: 90, time: 9}
+    + PKG_100_10 : {distance: 100, time: 10}
+    + PKG_110_11 : {distance: 110, time: 11}
+    + PKG_120_12 : {distance: 120, time: 12}
+    
++ For Local_rental block api, if you support ending trip with OTP, you need to pass trip end OTP too and field name will be 'trip_end_verification_code'
+
++ Rest others APIs **Block**, **Paid**, **Cancel** **and** **Booking Details** will remain same as Normal booking flow.
+
+### Search [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+    
+    + Body
+
+            {
+                "source": {
+                    "address": "Prestige Sunnyside Oak, Doddakannelli - Kaadubeesanahalli Road, near New Horizon Gurukul School, Bhoganhalli, Bengaluru, Karnataka, India",
+                    "latitude": 12.9317856,
+                    "longitude": 77.6964144,
+                    "city": "Bangalore"
+                },
+                "stopovers": [],
+                "trip_type": "LOCAL_RENTAL",
+                "start_time": "2023-11-02 07:20:00",
+                "end_time": "2023-11-02 13:20:00",
+                "search_id": "654202f992ec8b0016a34403",
+                "vendor_id": "MMT_ZORY",
+                "partner_name": "GOMMT",
+                "search_tags": ["B2C"],
+                "package_id": "PKG_60_6",
+                "mandatory_inclusions": [],
+                "mandatory_exclusions": [],
+                "trip_type_details": {
+                    "basic_trip_type": "OUTSTATION",
+                    "airport_type": "NONE"
+                }
+            }
+
++ Response 200 (application/json)
+
+            {
+                "distance_booked": 60,
+                "is_instant_search": false,
+                "is_instant_available": false,
+                "start_time": "2023-11-02 07:20:00",
+                "is_part_payment_allowed": true,
+                "communication_type": "PRE",
+                "verification_type": "OTP",
+                "car_types": [
+                    {
+                        "sku_id": "CT-Diesel-Newer:FFVC:Hatchback:Rental:021120230150:1698824954035:1080715173",
+                        "type": "hatchback",
+                        "subcategory": "basic",
+                        "combustion_type": "Diesel",
+                        "model": "Unknown",
+                        "make_year_type": "Newer",
+                        "make_year": 2019,
+                        "cancellation_rule": "SUPER_FLEXI",
+                        "fare_details": {
+                        "base_fare": 1440,
+                        "per_km_charge": 16,
+                        "per_km_extra_charge": 23.25,
+                        "extra_time_fare": {
+                            "rate": 2.32,
+                            "applicable_time": 1
+                            },
+                        "total_driver_charges": 0,
+                        "seller_discount": 0,
+                        "extra_charges": {
+                            "night_charges": {
+                                "amount": 0,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": false,
+                                "applicable_time_from": 0,
+                                "applicable_time_till": 0,
+                                "is_applicable": false
+                            },
+                            "toll_charges": {
+                                "amount": 0,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": false,
+                                "is_applicable": false
+                            },
+                            "state_tax": {
+                                "amount": 0,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": false,
+                                "is_applicable": false
+                            },
+                            "parking_charges": {
+                                "amount": 0,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": false,
+                                "is_applicable": false
+                            },
+                            "waiting_charges": {
+                                "amount": 100,
+                                "free_waiting_time": 45,
+                                "applicable_time": 30,
+                                "is_applicable": true
+                            },
+                        }
+                    },
+                    "zero_payment": false
+                    }
+                    ]
+            }
+
+# Group Reverse Booking Flow   
+
+<a href="https://ibb.co/HFRJ7Kb"><img src="https://i.ibb.co/vwft1cT/Reverse-Sequence-Diagram-org-page-0001.jpg" alt="Reverse-Sequence-Diagram-org-page-0001" border="0"></a>
+
+## Reverse Booking Search [/partnerreversesearchendpoint]
+
+A Flash booking search, also known as a reverse search booking, is a confirmed booking that will be flashed based on configuration settings.
+It will only be shown to partners who are configured to receive it. The API includes booking details, fare information, and vehicle details.
+
+### Reverse Booking Search [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+    
+    + Body
+
+            {
+                "source": {
+                  "address": "DLF Place, Gurgaon, Haryana, India",
+                  "latitude": 28.48968,
+                  "longitude": 77.09224
+                },
+                "destination": {
+                  "address": "Jaipur, Rajasthan, India",
+                  "latitude": 26.91243,
+                  "longitude": 75.78727
+                },
+                "trip_type": "ONE_WAY/ROUND_TRIP",
+                "start_time": "2020-01-06 21:00:00",
+                "end_time": "2020-01-07 21:00:00",
+                "is_instant_search": false,
+                "one_way_distance": 83,
+                "one_way_duration": 134,
+                "search_id": "56c5c8a269702d3a1b0b0000",
+                "order_reference_number": "NC770346218670301",
+                "vendor_id": "PARTNER_CODE",
+                "partner_name": "GOMMT",
+                "search_tags": ["EPASS", "B2C", "PB", "B2B", "FF"],
+                "distance_booked": 230,
+                "vehicle_details": {
+                    "type": "hatchback",
+                    "subcategory": "basic",
+                    "combustion_type":"Petrol/Diesel/CNG/Electric/Unknown",
+                    "model": "Swift/i10/Unknown",
+                    "make_year_type": "Older/Newer/Unknown",
+                    "make_year": 2017,
+                    "cancellation_rule": "FLEXI"
+                },
+                "communication_type": "PRE",
+                "verification_type": "OTP",
+                "verification_code": "2748",
+                "fare_details": {
+                    "base_fare": 704,
+                    "total_driver_charges": 0,
+                    "total_fare": 814,
+                    "amount_to_be_collected": 0,
+                    "per_km_charge": 21,
+                    "per_km_extra_charge": 21,
+                    "min_km_day": 0,
+                    "is_part_payment": false,
+                    "flashing_incentive": 0,
+                    "platform_fee": 0,
+                    "booking_gst": 0,
+                    "selected_add_ons": [
+                        {
+                            "name": "CARRIER",
+                            "amount": 100
+                        },
+                        {
+                            "name": "LANGUAGES",
+                            "amount": 100,
+                            "Value": "Hindi,English"
+                        }
+                    ],
+                    "extra_charges": {
+                        "night_charges": {
+                            "collection_type": "POST",
+                            "type": "FLAT"
+                            "amount": 250,
+                            "applicable_time_from": 21,
+                            "applicable_time_till": 6
+                        },
+                        "toll_charges": {
+                            "amount": 100,
+                            "is_included_in_base_fare": false,
+                            "is_included_in_grand_total": true
+                        },
+                        "state_tax": {
+                            "amount": 300,
+                            "is_included_in_base_fare": false,
+                            "is_included_in_grand_total": true
+                        },
+                        "parking_charges": {
+                            "amount": 150,
+                            "is_included_in_base_fare": false,
+                            "is_included_in_grand_total": true
+                        },
+                        "waiting_charges": {
+                            "amount": 100,
+                            "free_waiting_time": 45,
+                            "applicable_time": 30,
+                            "is_applicable": true
+                        },
+                        "extra_time": {
+                            "hours_slot": 12,
+                            "distance": 250,
+                            "per_km_extra_charge": 10,
+                        }
+                    }
+                },
+                "trip_type_details": {
+                "basic_trip_type": "OUTSTATION",
+                "airport_type": "PICKUP"
+                },
+                "flashed_instance": 2,
+                "flash_type": "DEFAULT/RYDE",
+                "flash_valid_till": "2020-01-07 21:00:00"
+            }
+
++ Response 200 (application/json)
+
+    + Body
+    
+            {
+                "response": {
+                    "success": true
+                }
+            }
+
++ Response 404 (application/json)
+
+            {
+               "code":"Invalid Reason",
+               "error":"Invalid Reason",
+               "response":null
+            }
+
+## Reverse Booking Unavailable [/partnerreverseunavailableendpoint]
+
+"Flash booking unavailable" or "reverse search unavailable" indicates that a Flash Booking previously sent is now invalid or has been accepted by another partner.
+
+### Reverse Booking Unavailable [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+    
+    + Body
+
+            {
+                "order_reference_number": "NC770346218670301",
+                "vendor_id": "PARTNER_CODE",
+                "partner_name": "GOMMT"
+            }
+
++ Response 200 (application/json)
+
+            {
+               "response":{
+                    "success": true
+               },
+               "error":null,
+               "code":null
+            }
+
++ Response 404 (application/json)
+
+            {
+               "code":"Invalid Reason",
+               "error":"Invalid Reason",
+               "response":null
+            }
+
+## Reverse Booking Accept [/api/partner/v1/dispatch/{booking_id}/accept]
+
+"Flash Booking accept" or "Reverse booking accept" refers to the partner's confirmation and acceptance of a flash booking, indicating their willingness to serve that particular booking.
+
+### Reverse Booking Accept [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+    
+    + Body
+
+            {
+                "partner_reference_number": "DL519000019",
+                "order_reference_number": "NC770346218670301",
+                "communication_type": "KIOSK", // can be PRE or KIOSK
+                "verification_type": "OTP", // can be OTP, QR, NA
+                "verification_code": "2343"
+            }
+
++ Response 200 (application/json)
+
+            {
+                "code": "ok",
+                "error": null,
+                "response": {
+                    "success": true,
+                    "message": "Successfully accepted request",
+                    "user": {
+                        "email": "mmt8920@go-mmt.com",
+                        "user_name": "TESTING trip",
+                        "phone_number": "9843159991",
+                        "country_code": "91"
+                    }
+                }
+            }
+
++ Response 404 (application/json)
+
+            {
+                "code":"TRIP_UNAVAILABLE",
+                "error":"Trip is no longer available",
+                "response": null
+            }
+            
+
+# Group Reschedule Flow
+
+With the Reschedule API, you can change the start time an existing A2C reservation if changes are allowed for a booking. Note that the pickup/dropoff locations cannot be changed for an existing reservation with this API. Partner should change only base_fare in case of price change. Fare components(Extra_charges) should remain same
+
+## Reschedule Block [/partnerrescheduleblockendpoint]
+This API is used to check if there is any update in the fare as it needs to be checked if the increment is fine with the customer or it falls within threshold value for us to absorb. In case of SYSTEM reschedule, price should never change.
+### Reschedule Block [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Body
+        {
+            "partner_reference_number": "PB1707113857850",
+            "order_reference_number": "NC7606416093565445",
+            "start_time":"2025-07-17 15:30:00", // new start time
+            "user":"SYSTEM" or “CUSTOMER”,
+            "partner_name":"GOMMT"
+        }
+        
++ Response 200 (application/json)
+
+    + Attributes(object)
+        + response
+            + success (boolean, required)
+            + verification_code (string, optional)
+            + fare_details (object,optional)
+        + error (string, optional)
+        + code (enum, optional) - will be required in case of error responsee
+            + PARTNER_RESCHEDULE_BLOCK_SERVER_ERROR - Any api/server error occured due to server fault
+            + PARTNER_RESCHEDULE_BLOCK_INVALID_TIME - If date or time is not valid for a booking
+            + PARTNER_RESCHEDULE_BLOCK_INVALID_RESPONSE - In case there is no response for the given request
+            + PARTNER_RESCHEDULE_BLOCK_INVALID_REQUEST - If any field is missing in request body that is required
+            + PARTNER_RESCHEDULE_BLOCK_DATA_NOT_FOUND - If data does not exists on server for any request
+    + Body
+        
+            {
+                "response": {
+                    "success": true,
+                    "verification_code": "1478", // this field is required in case there is an update in the verification code.
+                    "fare_details": { // this field is optional, if this node is not present then we will consider the fare unchanged and use the one which was passed in the search response
+                        "base_fare": 2480, // if there is an update in the fare details, each details need to be passed. We will consider the new value as the updated fare
+                        "per_km_charge": 10,
+                        "per_km_extra_charge": 10,
+                        "total_driver_charges": 0,
+                        "seller_discount": 800,
+                        "extra_charges": {
+                            "night_charges": {
+                                "amount": 250,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": true,
+                                "applicable_time_from": 21,
+                                "applicable_time_till": 6,
+                                "is_applicable": true
+                            },
+                            "toll_charges": {
+                                "amount": 100,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": true,
+                                “gst”:10//optional
+                                "is_applicable": true
+                            },
+                            "state_tax": {
+                                "amount": 300,
+                                "is_included_in_base_fare": false,
+                                "is_included_in_grand_total": true,
+                                "is_applicable": false
+                            },
+                            "waiting_charges": {
+                                "amount": 100,
+                                "free_waiting_time": 45,
+                                "applicable_time": 30,
+                                "is_applicable": true
+                            },
+                            "parking_charges": {
+                              "amount": 40,
+                              "is_included_in_base_fare": false,
+                              "is_included_in_grand_total": true,
+                              "is_applicable": true
+                            },
+                            "airport_entry_fee": {
+                              "amount": 300,
+                              "is_included_in_base_fare": true,
+                              "is_included_in_grand_total": true,
+                              "is_applicable": false
+                            },
+                        }
+                        "grand_total":404 // optional
+                    }
+                }
+            }
+            
++ Response 404 (application/json)
+
+            {
+                "response": {
+                "success": false,
+                "error": "Could not reschedule"
+                }
+            }
+
+## Reschedule Confirm [/partnerrescheduleconfirmendpoint]
+This api it used to confirm the reschdule with the new start time. Here we will be passing you the updated total_fare and amount_to_be_collected from the customer by the driver, note that the field amount_to_be_collected is applicable in case part payment is allowed for the booking, otherwise customer would be paying the amount online and there will be no change for the partner.
+### Reschedule Confirm [POST]
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            
+    + Body
+        {
+            "partner_reference_number": "PB1707113857850",
+            "order_reference_number": "NC7606416093565445",
+            "total_fare": 2282, 
+            "amount_to_be_collected": 2282, // will be 0 in case no part payment is not allowed so no amount to be collected by the driver from the customer
+            "platform_fee": 0,
+            "booking_gst": 0,
+            "vendor_id": "MMT_ZORY",
+            "partner_name": "GOMMT"
+        }
+
+        
++ Response 200 (application/json)
+    + Attributes(object)
+        + response
+            + success (boolean, required)
+        + error (string, optional)
+        + code (enum, optional) - will be required in case of error responsee
+            + PARTNER_RESCHEDULE_CONFIM_SERVER_ERROR - Any api/server error occured due to server fault
+    + Body
+            {
+                response:{"success": true}
+            }
+
++ Response 404 (application/json)
+
+            {
+                "response": {
+                "success": false,
+                "error": "Could not reschedule"
+                }
+            }
+
+# Group Zero Payment Flow
+
+#Flow
++ When the customer is making a booking, no payment or nominal payment will be collected from the customer
+
++ In the confirm API request & Payment details API response, MMT will pass the following parameters to the partner for ease of calculation and reconciliation -
+    + platform_fee - This node will share the amount of convenience fee + GST on the convenience fee being levied by MMT on the customer. Please note that this value varies based on the ATV
+    + booking_gst - This node will share the GST amount for the booking. This is applicable only for those partners where MMT is paying GST on behalf of the partner (non eCom partners)
+
++ The recommended calculations will be as follows -
+    + total_fare = Base fare + Sum of all inclusions (Toll, state tax, airport entry fee, etc)
+    + amount_to_be_collected = total_fare + platform_fee + booking_gst - paid_online
+    + Paid_online = (total_fare + platform_fee + booking_gst) - amount_to_be_collected
+    
++ In the add payment API, the amount collected from the customer is sent to MMT. Please ensure that it is the same as the amount_to_be_collected
+
++ The partner will not be liable to pay any GST on the platform_fee being collected from the customer
+
++ The reconciliation process will include platform_fee & booking_gst values as well
+
++ The changes to confirm API & payment details API are of first priority. The changes in alight API can be done after these have been executed
+
++ In case you display the fare breakup in your driver app, you can add the platform fee value as well
+
+#Search API
+Partners are required to pass a flag **"zero_payment" : true** for each SKU in search response and
+For more information to check Search API response Clicking on the link below will redirect you to the search api response.
++ [Search](/reference/normal-booking-flow/search/search)
+
+#Paid/Confirm API
+MMT will be sending two node in confirm/paid Api call **“platform_fee”** and **“booking_gst”**
+For more information to check Paid Api request Clicking on the link below will redirect you to the paid api request.
++ [Paid](/reference/normal-booking-flow/paid/paid)
+
+#Payment Details API
+When partner fetching payment details from MMT using Get method Payment details api, In Response MMT will be sending two node **"platform_fee"** and **"booking_gst"**
+For more information to check Payment Details Api response Clicking on the link below will redirect you to the Payment Details api response.
++ [Payment Details](/reference/payment-apis/payment-details/payment-details)
+
+# Group Provisional Booking Flow
+
+## Search [/partnersearchendpoint]
+
++ Search Tags
+    + PB: Search for provisional booking
+    
+### Search [POST]
++ Request
+
+    + Body
+            {
+                "source":{
+                    "address":"Terminal 1, Navpada, Chhatrapati Shivaji International Airport Area, Vile Parle, Mumbai, Maharashtra, India",
+                    "latitude":19.09314,
+                    "longitude":72.85675,
+                    "city":"Mumbai"
+                },
+                "destination":{
+                    "address":"Mumbai, Maharashtra, India",
+                    "latitude":19.07598,
+                    "longitude":72.87766,
+                    "city":"Mumbai"
+                },
+                "stopovers":[
+      
+                ],
+                "trip_type":"ONE_WAY",
+                "start_time":"2023-01-11 14:00:00",
+                "end_time":"2023-01-11 14:07:00",
+                "search_id":"63ac11288b934c0019edbdb0",
+                "vendor_id":"MERUMMT",
+                "partner_name":"GOMMT",
+                "search_tags":[
+                    "PB",
+                    "B2C"
+                ],
+                "mandatory_inclusions":[
+                    "ST",
+                    "TOLL",
+                    "NC",
+                    "PC",
+                    "AE"
+                ],
+                "mandatory_exclusions":[
+      
+                ],
+                "package_distance":7
+            }
+            
++ Response 200 (application/json)
+
+    + Body
+    
+        {
+          "distance_booked": 10,
+          "is_instant_search": false,
+          "is_instant_available": true,
+          "start_time": "2023-01-11 14:00:00",
+          "is_part_payment_allowed": true,
+          "communication_type": "KIOSK",
+          "verification_type": "OTP",
+          "car_types": [
+            {
+              "zero_payment":true/false
+              "sku_id": null,
+              "type": "sedan",
+              "subcategory": "basic",
+              "model": "Unknown",
+              "cancellation_rule": "FREE",
+              "fare_details": {
+                "base_fare": 336,
+                "per_km_charge": 32,
+                "per_km_extra_charge": 32,
+                "total_driver_charges": 0,
+                "extra_charges": {
+                  "service_charges": {
+                    "amount": 16,
+                    "is_included_in_base_fare": true,
+                    "is_included_in_grand_total": false
+                  },
+                  "night_charges": {
+                    "amount": 0,
+                    "is_included_in_base_fare": false,
+                    "is_included_in_grand_total": false,
+                    "applicable_time_from": 21,
+                    "applicable_time_till": 6,
+                    "is_applicable": false
+                  },
+                  "toll_charges": {
+                    "amount": 0,
+                    "is_included_in_base_fare": false,
+                    "is_included_in_grand_total": true
+                  },
+                  "state_tax": {
+                    "amount": 0,
+                    "is_included_in_base_fare": false,
+                    "is_included_in_grand_total": true
+                  },
+                  "parking_charges": {
+                    "amount": 179,
+                    "is_included_in_base_fare": false,
+                    "is_included_in_grand_total": true
+                  },
+                  "waiting_charges": {
+                    "amount": 100,
+                    "free_waiting_time": 45,
+                    "applicable_time": 30,
+                    "is_applicable": true
+                    },
+                  "convenience_charges": {
+                    "amount": 0,
+                    "is_included_in_base_fare": false,
+                    "is_included_in_grand_total": true
+                  }
+                }
+              },
+              "IncludedHr": null,
+              "AdditionalFarePerHr": null,
+              "passengers_allowed": "3",
+              "luggagebags_allowed": "2",
+              "ACAvailable": null,
+              "PackageInclusions": null,
+              "PackageExclusions": null,
+              "PackageExtras": null,
+              "CarInclusions": null,
+              "CarExclusions": null,
+              "CarExtras": null
+            }
+          ]
+        }
+
+## Block [/partnerblockendpoint]
+### Block [POST]
++ Request
+
+    + Body
+            {
+              "source": {
+                "address": "Terminal 1, Navpada, Chhatrapati Shivaji International Airport Area, Vile Parle, Mumbai, Maharashtra, India",
+                "latitude": 19.09314,
+                "longitude": 72.85675
+              },
+              "destination": {
+                "address": "Mumbai, Maharashtra, India",
+                "latitude": 19.07598,
+                "longitude": 72.87766
+              },
+              "trip_type": "ONE_WAY",
+              "start_time": "2023-01-11 14:00:00",
+              "end_time": "2023-01-11 14:07:00",
+              "distance": 10,
+              "fare_details": {
+                "base_fare": 336,
+                "total_driver_charges": 0,
+                "total_days_charged": null,
+                "state_tax": 0,
+                "toll_charges": 0,
+                "total_fare": 515
+              },
+              "search_id": "63ac11288b934c0019edbdb0",
+              "vehicle_type": "sedan",
+              "vehicle_subcategory": "basic",
+              "vendor_id": "PARTNERMMT",
+              "partner_name": "GOMMT",
+              "verification_code": "2573",
+              "vehicle_details": {
+                "sku_id": null,
+                "type": "sedan",
+                "subcategory": "basic",
+                "combustion_type": "Unknown",
+                "model": "Unknown",
+                "make_year_type": "Unknown",
+                "free_cancellation_window": "Unknown",
+                "cancellation_rule": "Unknown"
+              }
+            }
+            
++ Response 200 (application/json)
+
+    + Body
+    
+        {
+          "success": true,
+          "reference_number": "71777891"
+        }
+
+## Confirm [/partnerpaidendpoint]
+### Confirm [POST]
++ Request
+
+    + Body
+        {
+            "passenger": 
+            {
+                "name": "Ravindra Verma ",
+                "email": "rmgtacmesupport@gmail.com",
+                "phone_number": "9876543211"
+            },
+            "partner_reference_number": "71777891",
+            "order_reference_number": "CARPPGGR3PH3KJH",
+            "total_fare": 515,
+            "amount_to_be_collected": 515,
+            "vendor_id": "PARTNERMMT",
+            "partner_name": "GOMMT",
+            "platfrom_fee" 50,
+            "booking_gst" : 50
+        }
+            
++ Response 200 (application/json)
+
+    + Body
+        {
+            "success": true,
+            "reference_number": "9301041",
+            "verification_code": "8659723",
+            "verification_type": "OTP",
+            "TripStartOTP": null,
+            "TripEndOTP": null
+        }
+
+## Confirm Provisional [/api/partner/v1/dispatch/{booking_id}/confirm_provisional]
+
++ Partner hits this api when customer reaches the KIOSK to create the booking
+
+### Confirm Provisional [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+
+    + Body
+    
+            {
+              "booking_id": "NCA701853187611566"
+            }
+            
++ Response 200 (application/json)
+            
+        {
+           "response":{
+                "passenger": {
+                    "name": "Avikal Kohli",
+                    "email": "avikal.kohli@go-mmt.com",
+                    "phone_number": "8800661340"
+                }
+           },
+           "error":null,
+           "code":null
+        }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+# Group Inventory Details
+
+The reference for the 'booking_id' mentioned throughout the document will correspond to the 'order_reference_number' shared with the partner during the create booking API call.
+
+## Detach Trip [/api/partner/v1/dispatch/{booking_id}/detach]
+
+Once the booking is confirm and in any instances where there is no available inventory from the partner's end and there is a need to detach the booking, the Detach API should be called. Please note that there may be associated penalties for this action, based on the Service Level Agreement (SLA).
+
+### Detach Trip [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+
+    + Body
+    
+            {
+              "reason": "Cannot find drivers"
+            }
+            
++ Response 200 (application/json)
+            
+        {
+           "response":{},
+           "error":null,
+           "code":null
+        }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+## Assign Chauffeur [/api/partner/v1/dispatch/{booking_id}/assign]
+
+Assign a chauffeur for the booking ahead of the scheduled timings, providing vehicle information. Additionally, vaccination objects are optional.
+chaeffeur and vehicle id should always be size of 10 or less than characters.
+
+### Assign Chauffeur [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + chauffeur (object, required)
+            + id (string, required)
+            + name (string, required)
+            + mobile_number (string, required)
+            + image (string, optional)
+        + vehicle (object, required)
+            + id (string, required)
+            + name (string, required)
+            + color (string, optional)
+            + registration_number (string, required)
+            + vehicle_type (string, required)
+
+    + Body
+    
+            {
+              "booking_id": "NCA701853187611566",
+              "chauffeur" : {
+                "id": "56c5c8a269",
+                "name": "Adil Woasil",
+                "mobile_number": "9087654321",
+                "image": "http://lorempixel.com/100/100/"
+                },
+              "vehicle": {
+                "id": "56c5c8a269",
+                "name": "Maruti Eartiga VXI",
+                "color": "white",
+                "registration_number": "HR26TY0101",
+                "vehicle_type": "sedan"
+              }
+            }
+            
++ Response 200 (application/json)
+            
+        {
+           "response":{
+                "success": true,
+                "message": "Successfully accepted request",
+                "id": "DL519000019"
+           },
+           "error":null,
+           "code":null
+        }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+## Reassign Chauffeur [/api/partner/v1/dispatch/{booking_id}/reassign]
+
+In case of a change in the assigned inventory, reassign the inventory, including the chauffeur and vehicle, for the booking ahead of the scheduled timings.
+
+### Reassign Chauffeur [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + chauffeur (object, required)
+            + id (string, required)
+            + name (string, required)
+            + mobile_number (string, required)
+            + image (string, optional)
+        + vehicle (object, required)
+            + id (string, required)
+            + name (string, required)
+            + color (string, optional)
+            + registration_number (string, required)
+            + vehicle_type (string, required)
+
+    + Body
+    
+            {
+              "booking_id": "NCA701853187611566",
+              "chauffeur" : {
+                "id": "56c5c8a269",
+                "name": "Adil Woasil",
+                "mobile_number": "9087654321",
+                "image": "http://lorempixel.com/100/100/"
+                },
+              "vehicle": {
+                "id": "56c5c8a269",
+                "name": "Maruti Eartiga VXI",
+                "color": "white",
+                "registration_number": "HR26TY0101",
+                "vehicle_type": "sedan"
+              }
+            }
+            
++ Response 200 (application/json)
+            
+        {
+           "response":{},
+           "error":null,
+           "code":null
+        }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+
+## Unassign Chauffeur [/api/partner/v1/dispatch/{booking_id}/unassign]
+
+### Unassign Chauffeur [POST]
++ Request
+    
+    + Header
+        
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+    
+    + Body
+    
+            {
+                "booking_id": "NC725926968039039426"
+            }
+            
++ Response 200 (application/json)
+
+        {
+           "response":{
+                "success": true,
+                "message": "Successfully unassigned Request",
+                "id": "NC725926968039039426"
+           },
+           "error":null,
+           "code":null
+        }
+        
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+        
+        
+# Group Tracking Events
+The APIs in the Track Events category are designed to monitor and track the progress of the customer's ride.
+Timestamp must be in milliseconds.
+All events are mandatory. The conditions for the mandatory track events are as follows:
+
+1. The "Start" event must be called first.
+2. To trigger the "Arrived" event, the "Start" event must have been triggered.
+3. To trigger the "Boarded" event, the "Arrived" event must have been triggered.
+4. To trigger the "Alight" event, the "Boarded" event must have been triggered.
+
+## Validation for Event
+
+We have a check on latitude and longitude; events with incorrect latitude-longitude values will be rejected.
+
+## Events Flow chart
+
+This part shows a flowchart of the events that happen. It explains the important steps and choices made when making requests successfully. Look at the picture below to understand how the Events works visually.
+
+<a href="https://ibb.co/dMrd6YB"><img src="https://i.ibb.co/8s0W2ZM/Track-events-page-0001.jpg" alt="Track-events-page-0001" border="0"></a>
+
+
+## Start [/api/partner/v1/track/{booking_id}/start]
+The driver initiates the trip to pick up the customer in the 'start' API event.
+
+### Left for Pickup [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + device_id (string, required)
+
+    + Body
+    
+            {  
+                "booking_id": "NCA701853187611566",
+                "latitude":"28.4895122",
+                "longitude":"77.092306",
+                "timestamp":"1523964027498",
+                "device_id":"98:0C:A5:BB:CC:17"
+            }
+            
+    
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"STARTED"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+## Arrived [/api/partner/v1/track/{booking_id}/arrived]
+
+The driver has arrived at the pickup location as indicated in the 'arrived' API event.
+
+
+### Arrived [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + device_id (string, required)
+
+    + Body
+    
+            {  
+                "booking_id": "NCA701853187611566",
+                "latitude":"28.4895122",
+                "longitude":"77.092306",
+                "timestamp":"1523964027498",
+                "device_id":"98:0C:A5:BB:CC:17"
+            }
+            
+    
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"ARRIVED"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+## Boarded [/api/partner/v1/track/{booking_id}/boarded]
+The driver has confirmed the customer pickup after verifying details in the 'boarded' API event.
+
+### Boarded [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + device_id (string, required)
+
+    + Body
+    
+            {  
+                "booking_id": "NCA701853187611566",
+                "latitude":"28.4895122",
+                "longitude":"77.092306",
+                "timestamp":"1523964027498",
+                "device_id":"98:0C:A5:BB:CC:17",
+                "face_mask": {
+                    "status": true,
+                    "url": "https://i.picsum.photos/id/1025/200/300.jpg?hmac=IOMIDjfOXbZ-vD59diaXLcQcq5g6Xo3Zg_gRF9UmwL0"
+                },
+                "infographic_card": {
+                    "status" : true,
+                    "url": "https://i.picsum.photos/id/1025/200/300.jpg?hmac=IOMIDjfOXbZ-vD59diaXLcQcq5g6Xo3Zg_gRF9UmwL0"
+                },
+                "sanitization_kit": {
+                    "status": true,
+                    "url": "https://i.picsum.photos/id/1025/200/300.jpg?hmac=IOMIDjfOXbZ-vD59diaXLcQcq5g6Xo3Zg_gRF9UmwL0"
+                },
+                "arogya_setu": {
+                    "status": true
+                },
+                "info_video": {
+                    "status": true
+                }
+            }
+            
+    
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"BOARDED"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+        
+## Trip Complete [/api/partner/v1/track/{booking_id}/trip_complete]
+The driver has confirmed the customer deboarded the cab in 'trip_complete' API event.
+
+### Trip Complete (Only for B2B & it is optional) [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + device_id (string, required)
+
+    + Body
+    
+            {  
+                "booking_id": "NCA701853187611566",
+                "latitude":"28.4895122",
+                "longitude":"77.092306",
+                "timestamp":"1523964027498",
+                "device_id":"98:0C:A5:BB:CC:17",
+            }
+            
+    
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"TRIP_COMPLETE"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+        
+## Alight [/api/partner/v1/track/{booking_id}/alight]
+
+The driver has indicated that the journey has been completed in the 'alight' API event.
+
+## ALIGHT Event Validation
+
++ The latitude and longitude shared in the ALIGHT event should not be near the pick-up location. Ideally, the driver cannot mark the alight event from the pick-up location.
++ To mark an ALIGHT event, we must have received the BOARDED/TRIP_COMPLETE event first.
++ Garage to Garage data (odometer readings and supporting documents are optional).
+
+
+### Alight [POST]
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + device_id (string, required)
+
+    + Body
+
+
+            {
+               "booking_id":"NCA701853187611566",
+               "latitude":"28.4895122",
+               "longitude":"77.092306",
+               "timestamp":"1523964027498",
+               "device_id":"98:0C:A5:BB:CC:17",
+               "extra_charge": 1685,
+               "extra_fare_breakup":{
+                  "extra_travelled": {
+                        "amount": 100,
+                        "items": [{
+                            "name": "Extra Travelled",
+                            "amount": 100,
+                            "receipt": null
+                        }],
+                        "details": {
+                            "extra_kms": 5
+                        }
+                    },
+                "extra_time": {
+                    "amount": 100,
+                    "items": [{
+                        "name": "Extra Time",
+                        "amount": 100,
+                        "receipt": null
+                    }],
+                    "details": {
+                        "extra_minutes": 75
+                    }
+                },
+                  "night_charges":{
+                     "amount":250,
+                     "items":[
+                        {
+                           "name":"Night Charges",
+                           "amount":250,
+                           "receipt": null
+                        }
+                     ]
+                  },
+                  "toll_charges":{
+                     "amount":335,
+                     "items":[
+                        {
+                           "name":"All Tolls",
+                           "amount":335,
+                           "receipt":["https://www.fillmurray.com/640/360","https://www.fillmurray.com/640/360"]
+                        },
+                        {
+                           "name":"Manoharpur",
+                           "amount":65,
+                           "receipt":["https://www.fillmurray.com/640/360"]
+                        }
+                     ]
+                  },
+                  "state_tax":{
+                     "amount":600,
+                     "items":[
+                        {
+                           "name":"Haryana-Himachal",
+                           "amount":400,
+                           "receipt":["https://www.fillmurray.com/640/360"]
+                        },
+                        {
+                           "name":"Punjab-Haryana",
+                           "amount":200,
+                           "receipt":["https://www.fillmurray.com/640/360"]
+                        }
+                     ]
+                  },
+                  "parking_charges":{
+                     "amount":150,
+                     "items":[
+                        {
+                           "name":"Parking 1",
+                           "amount":100,
+                           "receipt":["https://www.fillmurray.com/640/360"]
+                        },
+                        {
+                           "name":"Parking 2",
+                           "amount":50,
+                           "receipt":["https://www.fillmurray.com/640/360"]
+                        }
+                     ]
+                  },
+                "airport_entry_fee":{
+                     "amount":150,
+                     "items":[
+                        {
+                           "name":"terminal 3 IGI",
+                           "amount":100,
+                           "receipt":["https://www.fillmurray.com/640/360"]
+                        }
+                     ]
+                  },
+                  "waiting_charges":{
+                     "amount":100,
+                     "items":[
+                        {
+                           "name":"Waiting Charge",
+                           "amount":100,
+                           "receipt": null
+                        }
+                     ]
+                  },
+                  "miscellaneous":{
+                     "amount":200,
+                     "items":[
+                        {
+                           "name":"Extra halt",
+                           "amount":200,
+                           "receipt": null
+                        }
+                     ]
+                  }
+               },
+               "odometer_readings": {//(Optional)
+                    "garage_out": {
+                        "reading": "12345",
+                        "timestamp": "1523960000000",
+                        "latitude": "28.480000",
+                        "longitude": "77.090000",
+                        "address": "Thane West, Mumbai, India"
+                    },
+                    "pickup": {
+                        "reading": "12360",
+                        "timestamp": "1523961000000",
+                        "latitude": "28.485000",
+                        "longitude": "77.091000",
+                        "address": "Thane West, Mumbai, India"
+                    },
+                    "drop": {
+                        "reading": 12410,
+                        "timestamp": "1523963000000",
+                        "latitude": "28.4895122",
+                        "longitude": "77.092306",
+                        "address": "Thane West, Mumbai, India"
+                    },
+                    "garage_in": {
+                        "reading": 12430,
+                        "timestamp": "1523965000000",
+                        "latitude": "28.480000",
+                        "longitude": "77.090000",
+                        "address": "Thane West, Mumbai, India"
+                    }
+                },
+                "supporting_documents": [//(Optional)
+                    "https:resources.mmt.io/883/booking/4743470/receipts/test.jpeg",
+                    "https:resources.mmt.io/883/dutyslips/5ff15b5a08f83bbe2f4738373a580863.pdf"
+                ]
+            }
+
+
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"ALIGHT"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+## Not Boarded [/api/partner/v1/track/{booking_id}/not_boarded]
+The driver indicates that the passenger has not boarded or reached the designated location after the waiting time has elapsed in the 'not_boarded' API event.
+
+### Not Boarded [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + reason (string, required)
+        + device_id (string, required)
+
+    + Body
+    
+            {  
+                "booking_id": "NCA701853187611566",
+                "latitude":"28.4895122",
+                "longitude":"77.092306",
+                "timestamp":"1523964027498",
+                "reason":"Passenger not reachable",
+                "device_id":"98:0C:A5:BB:CC:17",
+            }
+            
+    
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"NOT_BOARDED"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+## Update location [/api/partner/v1/track/{booking_id}/update]
+The real-time tracking feature enables users to monitor the location and status of vehicles, providing accurate and up-to-date information at any given moment. This functionality is facilitated through the 'update' API event and it is mandatory These updates will be provided at intervals of every 30 seconds,ensuring frequent and accurate location details
+
+### Update [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+            
+    + Attributes
+        + booking_id (string, required)
+        + latitude (string, required)
+        + longitude (string, required)
+        + timestamp (number, required)
+        + device_id (string, required)
+
+    + Body
+    
+            {  
+                "booking_id": "NCA701853187611566",
+                "latitude":"28.4895122",
+                "longitude":"77.092306",
+                "timestamp":"1523964027498",
+                "device_id":"98:0C:A5:BB:CC:17"
+            }
+
++ Response 200 (application/json)
+
+            {
+                "response":{
+                    "trip_state":"BOARDED"
+                },
+                "error": null,
+                "code": "ok"
+            }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Reason",
+           "error":"Invalid Reason",
+           "response":null
+        }
+
+        
+# Group Payment APIs
+
+The APIs introduced here are related to retrieving and updating payment information.
+
+## Payment Details [/api/partner/v1/dispatch/{booking_id}/details]
+
+At any time, the 'Payment Details' API can be accessed to fetch payment details and collect the remaining amount from the customer by invoking the same 'Payment Details' API.
+
+### Payment Details [GET]
+
++ Response 200 (application/json)
+            
+        {
+            "code": "ok",
+            "error": null,
+            "response": {
+                "order_reference_number": "CARPA1KA2TK2FXD",
+                "supplier_reference_number": "2289880",
+                "amount_to_be_collected": 69,
+                "paid_online": 888,
+                "platform_fee": 50,   //mmt fee// Only in case of Zero payment flow//
+                "booking_gst": 50,   //will be applicable only if partner is non-ecom else 0// Only in case of Zero payment flow//
+                "paid_cash": 0,
+                "min_payment_amount": 69,
+                "passenger_details": {
+                    "name": "Aman ",
+                    "mobile": "7404108801",
+                    "email": "ndn@jdj.com"
+                },
+                "chauffeur_details": {
+                    "name": "CARPAFMS5HCCJU1",
+                    "mobile": "8"
+                },
+                "vehicle_details": {
+                    "vehicle_number": "KA02AF7343",
+                    "vehicle_name": "NON-AC",
+                    "vehicle_color": "black"
+                },
+                "distance": 186,
+                "start_time": "2020-04-27T09:40:00.000Z",
+                "end_time": "2020-04-27T14:09:15.000Z",
+                "source_name": "Kempegowda International Airport Bengaluru (BLR),Bengaluru, India",
+                "destination_name": "Mysore, Karnataka, India",
+                "toll_charges": 100,
+                "state_tax": 0,
+                "night_charges": 0,
+                "extra_travelled_fare":36,
+                "extra_time_fare":0,
+                "total_driver_charges": 0,
+                "total_fare": 888,
+                "total_final_fare": 957,
+                "status_history": [
+                    "PENDING",
+                    "STARTED",
+                    "BOARDED"
+                ],
+                "started": {
+                    "location": {
+                        "type": "Point",
+                        "coordinates": [
+                            13.1986,
+                            77.7066
+                        ]
+                    },
+                    "timestamp": 1580215818283,
+                    "status": "STARTED",
+                    "device_id": "98:0C:A5:BB:CC:17"
+                },
+                "boarded": {
+                    "location": {
+                        "type": "Point",
+                        "coordinates": [
+                            30.6942,
+                            76.8606
+                        ]
+                    },
+                    "timestamp": 1568735015637,
+                    "status": "BOARDED",
+                    "device_id": "98:0C:A5:BB:CC:17"
+                },
+                "alight": {
+                    "location": {
+                        "type": "Point",
+                        "coordinates": [
+                            30.6942,
+                            76.8606
+                        ]
+                    },
+                    "timestamp": 1578046531469,
+                    "status": "ALIGHT",
+                    "device_id": "98:0C:A5:BB:CC:17"
+                }
+            }
+        }
+
++ Response 404 (application/json)
+
+        {
+           "code":"Invalid Booking",
+           "error":"Invalid Booking",
+           "response":null
+        }
+
+## Add Payment Collected In Cash : Depricated, do not use [/api/partner/v1/dispatch/{booking_id}/add_payment]
+After completing the journey, the driver collects the remaining amount(Part-payment, Extra charges), and the relevant information is then submitted through the 'add_payment' API.
+
+### Add Payment Collected In Cash [POST]
+
++ Request
+
+    + Header
+    
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+            user-agent: axios/1.6.7
+            accept-encoding: gzip
+            accept: */*
+
+    + Body
+    
+            {
+              "amount_paid": 500,
+              "order_reference_number": "CARPA1KA2TK2FXD"
+            }
+            
++ Response 200 (application/json)
+            
+        {
+            "code": "ok",
+            "error": null,
+            "response": {
+                "success": true,
+                "message": "Successfully added payment",
+                "amount_remaining": 1091
+            }
+        }
+
++ Response 404 (application/json)
+
+        {
+            "code": "Enter amount greater than 572 and less than 1491",
+            "error": "Enter amount greater than 572 and less than 1491",
+            "response": null
+        }
+        
+# Group Ratings & Reviews
+
+## Review [/partnerReviewendpoint]
+### Review [POST]
+Chauffeur and vehicle reviews are given based on tags that have a name and sentiment attached to it. 
+Sentiments can be POS/NEG/NEU. User may call out chauffeur/vehicle mismatch when the chauffeur's picture 
+or vehicle do not match with the given details. In case of chauffeur/vehicle mismatch, rating will not 
+be present and empty tags are passed. NPS and Ratings will be sent separatly. Dont put any retrictions on fields sent in the body.
+
+
++ Request
+    
+    + Header
+
+            Authorization: Basic ZmU1NzNkN2UxNGY1NWUwOWZiYzhiZDhjOTRiYzAzZDQxOGRkNGJmZDVkZmEw
+            Content-type: Application/json
+    
+    + Body
+
+            {
+                "vendor_id": "PARTNER_CODE",(Optional)
+                "partner_name": "GOMMT",
+                "order_reference_number": "CARPIFQG52V9AN3",
+                "fleet_owner_id": "5e2053cee122a30051123f14"
+                "chauffeur" : {
+                    "mismatch_reported": false,
+                    "rating": 5,
+                    "tags": [
+                      {
+                        "name": "PickUp",
+                        "sentiment": "POS"/NEG/NEU
+                      },
+                      {
+                        "name": "Behaviour",
+                        "sentiment": "POS"
+                      },
+                      {
+                        "name": "Punctuality",
+                        "sentiment": "POS"
+                      },
+                      {
+                        "name": "Driving",
+                        "sentiment": "POS"
+                      }
+                    ]
+                  },
+                "vehicle" : {
+                    "mismatch_reported": false,
+                    "rating": 5,
+                    "tags": [
+                      {
+                        "name": "Cleanliness",
+                        "sentiment": "POS"
+                      },
+                      {
+                        "name": "Car condition",
+                        "sentiment": "POS"
+                      },
+                      {
+                        "name": "Other",
+                        "sentiment": "POS"
+                      }
+                    ]
+                  }
+                },
+                "review": "Super Driving Or He Maintained Social Distancing And Followed Safety measures",
+                "crowd_sourcing_data": [
+                    {"id":17,"value":"Yes","title":"Was the driver safe for women travelers?"},
+                    {"id":9,"value":"No","title":"Did the driver use mobile while driving?"},
+                    {"id":42,"value":"Yes","title":"Did the driver charge you extra?", "followup": [{"id":52,"value":"300","title":"How much extra?"}]},
+                    {"id":43,"value":"Yes","title":"Will you like to travel again with the same driver?"}
+                ],
+                "nps" : {
+                    "value" : 10,
+                    "feedback" : "All credit goes to cab driver,he was extremely good .. we reached safely in Bangalore."
+                }
+            }
+
++ Response 200 (application/json)
+
+            {
+               "response":{
+                    "success": true
+               },
+               "error":null
+            }
+
++ Response 404 (application/json)
+
+            {
+               "error":"invalid order_reference_number",
+               "response":null
+            }
+
+# Group FAQ's
+
+## Search
+
++ What is a search ID, and what is the correlation between search, block?
+
+ Search ID is a unique parameter used to identify a single search. The same ID is passed in the Block API call.
+
++ Sample of night charge for inclusions and exclusions:
+   + Night charges inclusive and included in base fare:
+“night_charges": {
+  "amount": 250,
+  "is_included_in_base_fare": true,
+  "is_included_in_grand_total": true,
+  "applicable_time_from": 22,
+  "applicable_time_till": 6,
+  "is_applicable": true
+}
+
+   + Night charges inclusive and not included in base fare but included in grand total : 
+“night_charges": {
+  "amount": 250,
+  "is_included_in_base_fare": false,
+  "is_included_in_grand_total": true,
+  "applicable_time_from": 22,
+  "applicable_time_till": 6,
+  "is_applicable": true
+},
+
+  + Night charges exclusive
+“night_charges": {
+  "amount": 250,
+  "is_included_in_base_fare": false,
+  "is_included_in_grand_total": false,
+  "applicable_time_from": 22,
+  "applicable_time_till": 6,
+  "is_applicable": true
+}
+
+  + Night charges not applicable
+“night_charges": {
+  "amount": 250,
+  "is_included_in_base_fare": false,
+  "is_included_in_grand_total": false,
+  "applicable_time_from": 22,
+  "applicable_time_till": 6,
+  "is_applicable": false
+}
+
++ Need mandatory and optional fields in APIs?
+    + This information is already specified in the API documentation, where you can identify the required parameters labeled with the caption 'required.'.
+
++ All kiosk bookings or instant bookings or do we have some scheduled trips also?
+    + 1) If partner have dedicated kiosk center at airport the partner will get Kiosk bookings. 
+      2) For Instant booking partner should provide instant inventory is available. 
+      3) If partner has scheduled inventory then partner can do scheduled trips.
+
++ What is reverse booking search?
+    + In a scenario where a booking has not been accepted by any partner, the Reverse Booking Search API will be invoked.
+
++ What is meant by ECOM and NON ECOM partner?
+    + "**ECOM partner**" :  In the case of an ECOM partner, the partner will include the GST value in the Base fare.
+    + "**NON ECOM partner**" : For a NON ECOM partner, the partner will not include the GST value in the base fare. Instead, we (MMT) will collect GST on behalf of the partner.
+
++ In search api response what is difference b/w "is_instant_search" and "is_instant_available" ?
+    + "**is_instant_search**", this means whether the search is made for instant time and "**is_instant_available**" means whether instant inventory is available from partner side or not
+ --- 
+## Block
+
++ What’s the difference between block and confirm API ?
+    + The "Block" API and the "Confirm" API serve distinct purposes in the booking process. The "Block" API is intended for customers to select a specific inventory from the search page, reserving it for a certain duration. On the other hand, the "Confirm" API is used when customers proceed to make a payment, finalizing the booking and confirming the selected inventory.
+
++ What is the timeframe between block and confirm?
+    + 30min
+    
++ OTP verification is mandatory for all trips?
+    + Yes OTP is mandatory.
+
++ Do we get mmt booking or trip id once the trip is confirmed?
+    + In the Confirm API request, the order reference number (booking ID) will be generated by MMT.
+---
+## Chauffeur
+
++ How many hours before driver can mark start/reached nearby?
+    + It fully depends on the partner's side, regardless of any hour restrictions. 
+---
+## Events and Tracking
++ Events and tracking play a crucial role in user communication, as they form the basis for our interactions with the customer
+--- 
+## Generic
+
++ How we will control the serviceable cities?
+    + MMT will enable routes on a city level based on the cities where the partner provides inventory.
+    
++ How we will proceed with the UAT Testing?
+    + The partner endpoint will be deployed in the MMT staging environment, and the APIs will be tested in staging using the Postman collection before the transition to live
+
++ Do we get vendor login access from MMT to manage these trips and settings?
+    + Supply and Product team will help on this. 
+

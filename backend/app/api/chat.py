@@ -1,0 +1,226 @@
+"""Chat API endpoint with RAG"""
+
+import time
+from fastapi import APIRouter, HTTPException, status
+from typing import List, Dict
+
+from backend.app.models.requests import ChatRequest
+from backend.app.models.responses import (
+    ChatResponse,
+    ChatMetadata,
+    ConfidenceLevel,
+    ErrorResponse
+)
+from backend.app.services.vector_store import get_vector_store
+from backend.app.services.memory import get_memory_manager
+from backend.app.services.llm import get_llm_service
+from backend.app.utils.logger import api_logger, log_query_metrics
+from backend.app.core.config import settings
+from backend.app.core.prompts import NO_RELEVANT_CONTEXT_MESSAGE
+
+router = APIRouter()
+
+
+def determine_confidence(avg_similarity: float, num_chunks: int) -> ConfidenceLevel:
+    """Determine confidence level based on retrieval metrics"""
+    if num_chunks == 0 or avg_similarity < settings.similarity_threshold:
+        return ConfidenceLevel.NONE
+    elif avg_similarity >= 0.80:
+        return ConfidenceLevel.HIGH
+    elif avg_similarity >= 0.70:
+        return ConfidenceLevel.MEDIUM
+    else:
+        return ConfidenceLevel.LOW
+
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Chat with the travel assist bot",
+    description="Send a query to the chatbot and receive an answer based on the documentation.",
+    responses={
+        200: {"description": "Successful response with answer"},
+        400: {"description": "Invalid request", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse}
+    }
+)
+async def chat(request: ChatRequest) -> ChatResponse:
+    """
+    Process a chat query with RAG
+    
+    This endpoint:
+    1. Retrieves conversation memory
+    2. Performs semantic search in vector store
+    3. Checks similarity threshold
+    4. Generates answer using Azure OpenAI
+    5. Updates conversation memory
+    
+    Args:
+        request: ChatRequest with session_id and user_query
+        
+    Returns:
+        ChatResponse with answer, sources, and metadata
+    """
+    api_logger.info(f"Chat request: session={request.session_id}, query={request.user_query[:100]}")
+    start_time = time.time()
+    
+    try:
+        # Step 1: Get services
+        vector_store = get_vector_store()
+        memory_manager = get_memory_manager()
+        llm_service = get_llm_service()
+        
+        # Step 2: Add user message to memory
+        memory_manager.add_user_message(request.session_id, request.user_query)
+        
+        # Step 3: Semantic search
+        api_logger.info("Performing semantic search")
+        retrieved_chunks = vector_store.semantic_search(
+            query=request.user_query,
+            top_k=settings.top_k_results
+        )
+        
+        # Step 4: Check if we have relevant results
+        if not retrieved_chunks:
+            api_logger.warning("No relevant chunks found above similarity threshold")
+            
+            # Add assistant response to memory
+            memory_manager.add_assistant_message(request.session_id, NO_RELEVANT_CONTEXT_MESSAGE)
+            
+            latency = (time.time() - start_time) * 1000
+            
+            # Log metrics
+            log_query_metrics(
+                api_logger,
+                session_id=request.session_id,
+                query=request.user_query,
+                retrieved_chunks=0,
+                avg_similarity=0.0,
+                latency_ms=latency,
+                confidence="none"
+            )
+            
+            return ChatResponse(
+                session_id=request.session_id,
+                answer=NO_RELEVANT_CONTEXT_MESSAGE,
+                sources=[],
+                confidence=ConfidenceLevel.NONE,
+                metadata=ChatMetadata(
+                    retrieved_chunks=0,
+                    avg_similarity=0.0,
+                    latency_ms=round(latency, 2)
+                )
+            )
+        
+        # Calculate average similarity
+        avg_similarity = sum(chunk['score'] for chunk in retrieved_chunks) / len(retrieved_chunks)
+        api_logger.info(f"Retrieved {len(retrieved_chunks)} chunks, avg similarity: {avg_similarity:.3f}")
+        
+        # Step 5: Get conversation memory
+        memory_context = memory_manager.get_context(request.session_id)
+        
+        # Step 6: Check if we need to summarize
+        if memory_manager.needs_summarization(request.session_id):
+            api_logger.info("Conversation needs summarization")
+            turns_to_summarize = memory_manager.get_turns_for_summarization(request.session_id)
+            summary = await llm_service.summarize_conversation(turns_to_summarize)
+            memory_manager.set_summary(request.session_id, summary)
+        
+        # Step 7: Generate answer using LLM
+        api_logger.info("Generating answer with LLM")
+        answer, sources = await llm_service.generate_answer(
+            query=request.user_query,
+            context=retrieved_chunks,
+            memory=memory_context
+        )
+        
+        # Step 8: Add assistant response to memory
+        memory_manager.add_assistant_message(request.session_id, answer)
+        
+        # Step 9: Determine confidence
+        confidence = determine_confidence(avg_similarity, len(retrieved_chunks))
+        
+        # Calculate total latency
+        latency = (time.time() - start_time) * 1000
+        
+        # Log metrics
+        log_query_metrics(
+            api_logger,
+            session_id=request.session_id,
+            query=request.user_query,
+            retrieved_chunks=len(retrieved_chunks),
+            avg_similarity=avg_similarity,
+            latency_ms=latency,
+            confidence=confidence.value
+        )
+        
+        return ChatResponse(
+            session_id=request.session_id,
+            answer=answer,
+            sources=sources,
+            confidence=confidence,
+            metadata=ChatMetadata(
+                retrieved_chunks=len(retrieved_chunks),
+                avg_similarity=round(avg_similarity, 3),
+                latency_ms=round(latency, 2)
+            )
+        )
+        
+    except ValueError as e:
+        api_logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    
+    except Exception as e:
+        api_logger.error(f"Error processing chat request: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing request: {str(e)}"
+        )
+
+
+@router.get(
+    "/session/{session_id}",
+    summary="Get session information",
+    description="Retrieve information about a conversation session"
+)
+async def get_session_info(session_id: str):
+    """Get session statistics and information"""
+    try:
+        memory_manager = get_memory_manager()
+        stats = memory_manager.get_session_stats(session_id)
+        return {
+            "session_id": session_id,
+            **stats
+        }
+    except Exception as e:
+        api_logger.error(f"Error getting session info: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting session info: {str(e)}"
+        )
+
+
+@router.delete(
+    "/session/{session_id}",
+    summary="Clear session",
+    description="Clear conversation history for a session"
+)
+async def clear_session(session_id: str):
+    """Clear a conversation session"""
+    try:
+        memory_manager = get_memory_manager()
+        success = memory_manager.clear_session(session_id)
+        if success:
+            return {"status": "success", "message": f"Session {session_id} cleared"}
+        else:
+            return {"status": "not_found", "message": f"Session {session_id} not found"}
+    except Exception as e:
+        api_logger.error(f"Error clearing session: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error clearing session: {str(e)}"
+        )
