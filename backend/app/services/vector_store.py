@@ -95,21 +95,22 @@ class VectorStore:
         # Prepare vectors for Pinecone
         vectors = []
         for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            # Ensure api_name is never None (Pinecone doesn't accept null values)
-            api_name = chunk['metadata'].get('api_name')
-            if api_name is None:
-                api_name = ''
+            metadata = chunk['metadata']
             
+            # Ensure all fields are never None (Pinecone doesn't accept null values)
             vector = {
-                "id": chunk['metadata']['chunk_id'],
+                "id": metadata['chunk_id'],
                 "values": embedding,
                 "metadata": {
-                    "text": chunk['text'][:1000],  # Pinecone metadata size limit
-                    "section_title": chunk['metadata']['section_title'],
-                    "api_name": api_name,
-                    "source": chunk['metadata']['source'],
-                    "chunk_index": chunk['metadata']['chunk_index'],
-                    "token_count": chunk['metadata'].get('token_count', 0)
+                    "text": chunk['text'][:40000],  # Store more text for better context
+                    "section_title": metadata.get('section_title', ''),
+                    "api_endpoint": metadata.get('api_endpoint', ''),
+                    "h1": metadata.get('h1', ''),
+                    "h2": metadata.get('h2', ''),
+                    "h3": metadata.get('h3', ''),
+                    "source": metadata.get('source', ''),
+                    "chunk_index": metadata.get('chunk_index', 0),
+                    "token_count": metadata.get('token_count', 0)
                 }
             }
             vectors.append(vector)
@@ -184,7 +185,10 @@ class VectorStore:
                 "text": match.metadata.get('text', ''),
                 "metadata": {
                     "section_title": match.metadata.get('section_title', ''),
-                    "api_name": match.metadata.get('api_name', ''),
+                    "api_endpoint": match.metadata.get('api_endpoint', ''),
+                    "h1": match.metadata.get('h1', ''),
+                    "h2": match.metadata.get('h2', ''),
+                    "h3": match.metadata.get('h3', ''),
                     "source": match.metadata.get('source', ''),
                     "chunk_index": match.metadata.get('chunk_index', 0),
                     "token_count": match.metadata.get('token_count', 0)

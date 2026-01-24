@@ -23,17 +23,17 @@ class Settings(BaseSettings):
     embedding_dimension: int = 384  # all-MiniLM-L6-v2 dimension
     
     # RAG Configuration
-    chunk_size: int = 600
-    chunk_overlap: int = 75
-    top_k_results: int = 4
-    similarity_threshold: float = 0.65
+    chunk_size: int = 500  # Optimal size for semantic chunks
+    chunk_overlap: int = 100  # Good overlap for context continuity
+    top_k_results: int = 5  # Retrieve more candidates
+    similarity_threshold: float = 0.30  # Lower to catch more relevant content
     
     # Memory Configuration
-    max_conversation_turns: int = 5
+    max_conversation_turns: int = 6  # Keep more history
     
     # LLM Configuration
-    llm_temperature: float = 0.1
-    llm_max_tokens: int = 800
+    llm_temperature: float = 0.05  # Lower temperature for more factual responses
+    llm_max_tokens: int = 1200  # Allow longer, more detailed responses
     
     # Logging
     log_level: str = "INFO"

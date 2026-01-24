@@ -126,13 +126,13 @@ class LLMService:
     
     def _format_context(self, context: List[Dict]) -> str:
         """
-        Format retrieved chunks into context string
+        Format retrieved chunks into context string with better structure
         
         Args:
             context: List of chunks with metadata
             
         Returns:
-            Formatted context string
+            Formatted context string optimized for LLM
         """
         if not context:
             return "No relevant documentation found."
@@ -140,11 +140,18 @@ class LLMService:
         formatted_chunks = []
         for i, chunk in enumerate(context, 1):
             section = chunk['metadata'].get('section_title', 'Unknown Section')
+            api_endpoint = chunk['metadata'].get('api_endpoint', '')
             text = chunk.get('text', '')
             
-            formatted_chunks.append(
-                f"[Source {i}: {section}]\n{text}\n"
-            )
+            # Build source label
+            source_label = f"[Source {i}: {section}"
+            if api_endpoint:
+                source_label += f" | Endpoint: {api_endpoint}"
+            source_label += "]"
+            
+            # Format chunk with clear separation
+            formatted_chunk = f"{source_label}\n{text}\n{'=' * 80}\n"
+            formatted_chunks.append(formatted_chunk)
         
         return "\n".join(formatted_chunks)
     
