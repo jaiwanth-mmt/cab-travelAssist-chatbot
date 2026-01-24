@@ -64,7 +64,7 @@ class SessionMemory:
     
     def get_context_for_llm(self) -> str:
         """
-        Get formatted context for LLM
+        Get formatted context for LLM with better structure
         
         Returns conversation history as a formatted string.
         If conversation is long, returns summary + recent turns.
@@ -78,7 +78,7 @@ class SessionMemory:
         
         # Long conversation: return summary + recent turns
         if self.summary:
-            recent_turns = self.turns[-3:]  # Last 3 turns
+            recent_turns = self.turns[-4:]  # Last 4 turns for more context
             context = f"Previous conversation summary:\n{self.summary}\n\n"
             context += "Recent conversation:\n"
             context += self._format_turns(recent_turns)
@@ -87,6 +87,14 @@ class SessionMemory:
             # No summary yet, return recent turns only
             recent_turns = self.turns[-settings.max_conversation_turns:]
             return self._format_turns(recent_turns)
+    
+    def get_conversation_for_query_rewrite(self) -> List[Dict]:
+        """
+        Get conversation history for query rewriting
+        Returns last N turns as list of dicts
+        """
+        recent_turns = self.turns[-5:] if len(self.turns) >= 5 else self.turns
+        return [turn.to_dict() for turn in recent_turns]
     
     def _format_turns(self, turns: List[ConversationTurn]) -> str:
         """Format turns as readable text"""
@@ -142,6 +150,13 @@ class MemoryManager:
         """Get formatted conversation context for LLM"""
         session = self.get_session(session_id)
         return session.get_context_for_llm()
+    
+    def get_conversation_for_query_rewrite(self, session_id: str) -> List[Dict]:
+        """Get conversation history for query rewriting"""
+        if session_id not in self.sessions:
+            return []
+        session = self.get_session(session_id)
+        return session.get_conversation_for_query_rewrite()
     
     def needs_summarization(self, session_id: str) -> bool:
         """Check if session needs summarization"""
