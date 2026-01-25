@@ -90,25 +90,35 @@ async def chat(request: ChatRequest) -> ChatResponse:
         
         processed_query = query_info["processed_query"]
         intent = query_info["intent"]
+        is_meta_query = query_info.get("is_meta_query", False)
         
-        api_logger.info(f"Query intent: {intent}, processed: {processed_query[:100]}")
+        api_logger.info(f"Query intent: {intent}, is_meta: {is_meta_query}, processed: {processed_query[:100]}")
         
-        # Step 5: Hybrid search with re-ranking
-        api_logger.info("Performing hybrid search")
-        retrieved_chunks = hybrid_search.search(
-            query=processed_query,
-            intent=intent,
-            top_k=settings.top_k_results
-        )
+        # Step 5: Check if this is a meta-query and we have cached chunks
+        retrieved_chunks = []
+        used_cache = False
         
-        # Step 6: Apply re-ranking
-        if retrieved_chunks:
-            api_logger.info("Applying re-ranking")
-            retrieved_chunks = reranker.rerank(
-                chunks=retrieved_chunks,
-                remove_duplicates=True,
-                ensure_diversity=True
+        if is_meta_query and memory_manager.has_cached_chunks(request.session_id):
+            api_logger.info("Meta-query detected - reusing cached chunks from previous turn")
+            retrieved_chunks = memory_manager.get_cached_chunks(request.session_id)
+            used_cache = True
+        else:
+            # Step 5a: Hybrid search with re-ranking
+            api_logger.info("Performing hybrid search")
+            retrieved_chunks = hybrid_search.search(
+                query=processed_query,
+                intent=intent,
+                top_k=settings.top_k_results
             )
+            
+            # Step 6: Apply re-ranking
+            if retrieved_chunks:
+                api_logger.info("Applying re-ranking")
+                retrieved_chunks = reranker.rerank(
+                    chunks=retrieved_chunks,
+                    remove_duplicates=True,
+                    ensure_diversity=True
+                )
         
         # Step 7: Check if we have relevant results
         if not retrieved_chunks:
@@ -169,7 +179,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # Step 11: Add assistant response to memory
         memory_manager.add_assistant_message(request.session_id, answer)
         
-        # Step 12: Determine confidence
+        # Step 12: Cache retrieved chunks for potential follow-up meta-queries
+        if not used_cache:
+            memory_manager.cache_retrieved_chunks(request.session_id, retrieved_chunks, request.user_query)
+        
+        # Step 13: Determine confidence
         confidence = determine_confidence(avg_similarity, len(retrieved_chunks))
         
         # Calculate total latency

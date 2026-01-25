@@ -149,6 +149,7 @@ class QueryPreprocessor:
         
         # Extract context from recent conversation
         context_terms = []
+        context_phrases = []
         
         # Look at last 2-3 turns
         recent_turns = conversation_history[-3:] if len(conversation_history) >= 3 else conversation_history
@@ -169,18 +170,101 @@ class QueryPreprocessor:
                 # Extract endpoints
                 endpoint_matches = re.findall(r'/\w+', user_text)
                 context_terms.extend(endpoint_matches)
+                
+                # Extract important noun phrases (broader context)
+                # Look for common topic patterns
+                topic_patterns = [
+                    r'\b(tracking\s+flow)\b',
+                    r'\b(booking\s+process)\b',
+                    r'\b(payment\s+flow)\b',
+                    r'\b(authentication\s+process)\b',
+                    r'\b(api\s+integration)\b',
+                    r'\b(error\s+handling)\b',
+                    r'\b(status\s+updates)\b',
+                    r'\b(driver\s+assignment)\b',
+                    r'\b(trip\s+lifecycle)\b',
+                ]
+                
+                for pattern in topic_patterns:
+                    matches = re.findall(pattern, user_text.lower())
+                    context_phrases.extend(matches)
+                
+                # Extract key terms from common question patterns
+                # "what is X", "how to X", "explain X"
+                question_patterns = [
+                    r'(?:what is|explain|describe|tell me about)\s+(?:the\s+)?([a-z\s]{3,30}?)(?:\?|$|\s+flow|\s+process)',
+                    r'(?:how to|how do i)\s+([a-z\s]{3,30}?)(?:\?|$)',
+                ]
+                
+                for pattern in question_patterns:
+                    matches = re.findall(pattern, user_text.lower())
+                    if matches:
+                        # Clean up the extracted phrases
+                        for match in matches:
+                            cleaned = match.strip()
+                            if len(cleaned.split()) <= 5:  # Keep reasonable length phrases
+                                context_phrases.append(cleaned)
+        
+        # Combine all context
+        all_context = context_terms + context_phrases
         
         # Create rewritten query
-        if context_terms:
-            # Get unique context terms
-            unique_context = list(set(context_terms))[:3]
+        if all_context:
+            # Get unique context, prioritize phrases over single terms
+            unique_context = []
+            seen = set()
             
-            # Rewrite query with context
-            rewritten = f"{current_query} (context: {' '.join(unique_context)})"
-            logger.info(f"Rewrote follow-up query: '{current_query}' -> '{rewritten}'")
-            return rewritten
+            # Add phrases first
+            for item in context_phrases:
+                if item and item not in seen:
+                    unique_context.append(item)
+                    seen.add(item)
+            
+            # Add terms if we need more context
+            for item in context_terms:
+                if item and item not in seen and len(unique_context) < 4:
+                    unique_context.append(item)
+                    seen.add(item)
+            
+            if unique_context:
+                # Rewrite query with context
+                context_str = ' '.join(unique_context[:3])  # Limit to top 3
+                rewritten = f"{current_query} (context: {context_str})"
+                logger.info(f"Rewrote follow-up query: '{current_query}' -> '{rewritten}'")
+                return rewritten
         
         return current_query
+    
+    def is_meta_query(self, query: str) -> bool:
+        """
+        Detect if query is a meta-query (asking about previous answer)
+        These queries should reuse cached context instead of new retrieval
+        
+        Returns: True if query is meta (summarize, elaborate, explain more, etc.)
+        """
+        query_lower = query.lower().strip()
+        
+        # Meta query patterns
+        meta_patterns = [
+            r'^(summarize|summarise)\s*(it|that|this)?',
+            r'^(explain|elaborate)\s*(more|further|it|that|this)?',
+            r'^(tell me more|more details|more info)',
+            r'^(give|show|provide)\s*(me\s*)?(an?\s+)?(example|sample)',
+            r'^(what|can you)\s*(do you\s*)?(mean|explain)',
+            r'^(break it down|simplify)',
+            r'^(in other words|to clarify)',
+        ]
+        
+        for pattern in meta_patterns:
+            if re.search(pattern, query_lower):
+                return True
+        
+        # Very short queries with pronouns
+        if len(query_lower.split()) <= 3:
+            if re.search(r'\b(it|this|that)\b', query_lower):
+                return True
+        
+        return False
     
     def preprocess(
         self,
@@ -196,7 +280,11 @@ class QueryPreprocessor:
             - processed_query: Enhanced query for retrieval
             - intent: Detected intent
             - entities: Extracted entities
+            - is_meta_query: Whether this is a meta-query
         """
+        # Check if this is a meta-query
+        is_meta = self.is_meta_query(query)
+        
         # Detect intent
         intent = self.detect_intent(query)
         
@@ -210,13 +298,14 @@ class QueryPreprocessor:
         # Expand query
         expanded_query = self.expand_query(query, intent)
         
-        logger.info(f"Query preprocessing: intent={intent}, entities={entities}")
+        logger.info(f"Query preprocessing: intent={intent}, is_meta={is_meta}, entities={entities}")
         
         return {
             "original_query": query,
             "processed_query": expanded_query,
             "intent": intent,
-            "entities": entities
+            "entities": entities,
+            "is_meta_query": is_meta
         }
 
 
