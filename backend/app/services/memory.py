@@ -36,6 +36,9 @@ class SessionMemory:
         self.summary: Optional[str] = None
         self.created_at = datetime.utcnow()
         self.last_accessed = datetime.utcnow()
+        # Cache for retrieved documents from the last turn
+        self.last_retrieved_chunks: List[Dict] = []
+        self.last_query: Optional[str] = None
     
     def add_turn(self, role: str, content: str):
         """Add a conversation turn"""
@@ -109,6 +112,24 @@ class SessionMemory:
         # Summarize all but the last 3 turns
         turns_to_summarize = self.turns[:-3] if len(self.turns) > 3 else self.turns
         return self._format_turns(turns_to_summarize)
+    
+    def cache_retrieved_chunks(self, chunks: List[Dict], query: str):
+        """Cache retrieved chunks from the current turn for potential reuse"""
+        self.last_retrieved_chunks = chunks
+        self.last_query = query
+        logger.info(f"Cached {len(chunks)} chunks for session {self.session_id}")
+    
+    def get_cached_chunks(self) -> List[Dict]:
+        """Get cached chunks from previous turn"""
+        return self.last_retrieved_chunks
+    
+    def has_cached_chunks(self) -> bool:
+        """Check if there are cached chunks available"""
+        return len(self.last_retrieved_chunks) > 0
+    
+    def get_last_query(self) -> Optional[str]:
+        """Get the last query that was processed"""
+        return self.last_query
 
 
 class MemoryManager:
@@ -173,6 +194,32 @@ class MemoryManager:
         """Get conversation turns that need summarization"""
         session = self.get_session(session_id)
         return session.get_turns_for_summarization()
+    
+    def cache_retrieved_chunks(self, session_id: str, chunks: List[Dict], query: str):
+        """Cache retrieved chunks for a session"""
+        session = self.get_session(session_id)
+        session.cache_retrieved_chunks(chunks, query)
+    
+    def get_cached_chunks(self, session_id: str) -> List[Dict]:
+        """Get cached chunks from previous turn"""
+        if session_id not in self.sessions:
+            return []
+        session = self.get_session(session_id)
+        return session.get_cached_chunks()
+    
+    def has_cached_chunks(self, session_id: str) -> bool:
+        """Check if session has cached chunks"""
+        if session_id not in self.sessions:
+            return False
+        session = self.get_session(session_id)
+        return session.has_cached_chunks()
+    
+    def get_last_query(self, session_id: str) -> Optional[str]:
+        """Get the last query for a session"""
+        if session_id not in self.sessions:
+            return None
+        session = self.get_session(session_id)
+        return session.get_last_query()
     
     def get_session_stats(self, session_id: str) -> Dict:
         """Get statistics about a session"""
