@@ -15,7 +15,6 @@ class LLMService:
     """Azure OpenAI service wrapper"""
     
     def __init__(self):
-        """Initialize Azure OpenAI client"""
         logger.info("Initializing Azure OpenAI client")
         self.client = AzureOpenAI(
             api_key=settings.azure_openai_key,
@@ -30,28 +29,15 @@ class LLMService:
         context: List[Dict],
         memory: str
     ) -> Tuple[str, List[str]]:
-        """
-        Generate answer using Azure OpenAI
-        
-        Args:
-            query: User's question
-            context: Retrieved chunks from vector store
-            memory: Conversation history
-            
-        Returns:
-            Tuple of (answer, sources)
-        """
-        # Format context from retrieved chunks
+        """Generate answer using Azure OpenAI"""
         context_text = self._format_context(context)
         
-        # Build the system prompt
         system_message = SYSTEM_PROMPT.format(
             context=context_text,
             memory=memory,
             query=query
         )
         
-        # Prepare messages for API call
         messages = [
             {"role": "system", "content": system_message}
         ]
@@ -59,7 +45,6 @@ class LLMService:
         try:
             logger.info(f"Generating answer for query: {query[:100]}...")
             
-            # Call Azure OpenAI
             response = await asyncio.to_thread(
                 self.client.chat.completions.create,
                 model=self.deployment,
@@ -73,7 +58,6 @@ class LLMService:
             
             answer = response.choices[0].message.content
             
-            # Extract sources from context
             sources = list(set([
                 chunk['metadata']['section_title']
                 for chunk in context
@@ -88,15 +72,7 @@ class LLMService:
             raise
     
     async def summarize_conversation(self, conversation: str) -> str:
-        """
-        Summarize a conversation
-        
-        Args:
-            conversation: Formatted conversation history
-            
-        Returns:
-            Summary string
-        """
+        """Summarize a conversation"""
         prompt = SUMMARIZATION_PROMPT.format(conversation=conversation)
         
         messages = [
@@ -121,19 +97,10 @@ class LLMService:
             
         except Exception as e:
             logger.error(f"Error generating summary: {str(e)}")
-            # Return a fallback
             return "Summary generation failed. Continuing with recent conversation history."
     
     def _format_context(self, context: List[Dict]) -> str:
-        """
-        Format retrieved chunks into context string with better structure
-        
-        Args:
-            context: List of chunks with metadata
-            
-        Returns:
-            Formatted context string optimized for LLM
-        """
+        """Format retrieved chunks into context string"""
         if not context:
             return "No relevant documentation found."
         
@@ -143,28 +110,17 @@ class LLMService:
             api_endpoint = chunk['metadata'].get('api_endpoint', '')
             text = chunk.get('text', '')
             
-            # Build source label
             source_label = f"[Source {i}: {section}"
             if api_endpoint:
                 source_label += f" | Endpoint: {api_endpoint}"
             source_label += "]"
             
-            # Format chunk with clear separation
             formatted_chunk = f"{source_label}\n{text}\n{'=' * 80}\n"
             formatted_chunks.append(formatted_chunk)
         
         return "\n".join(formatted_chunks)
     
     def _deduplicate_chunks(self, chunks: List[Dict]) -> List[Dict]:
-        """
-        Remove duplicate or highly overlapping chunks
-        
-        Args:
-            chunks: List of chunks
-            
-        Returns:
-            Deduplicated list
-        """
         if not chunks:
             return []
         
@@ -173,7 +129,6 @@ class LLMService:
         
         for chunk in chunks:
             text = chunk.get('text', '')
-            # Use first 200 chars as fingerprint
             fingerprint = text[:200].strip()
             
             if fingerprint not in seen_texts:
@@ -183,12 +138,10 @@ class LLMService:
         return unique_chunks
 
 
-# Global instance
 _llm_service = None
 
 
 def get_llm_service() -> LLMService:
-    """Get or create the global LLM service instance"""
     global _llm_service
     if _llm_service is None:
         _llm_service = LLMService()

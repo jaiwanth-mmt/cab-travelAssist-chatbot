@@ -15,7 +15,7 @@ class ConversationTurn:
     """Single conversation turn"""
     
     def __init__(self, role: str, content: str):
-        self.role = role  # 'user' or 'assistant'
+        self.role = role
         self.content = content
         self.timestamp = datetime.utcnow()
     
@@ -36,71 +36,52 @@ class SessionMemory:
         self.summary: Optional[str] = None
         self.created_at = datetime.utcnow()
         self.last_accessed = datetime.utcnow()
-        # Cache for retrieved documents from the last turn
         self.last_retrieved_chunks: List[Dict] = []
         self.last_query: Optional[str] = None
     
     def add_turn(self, role: str, content: str):
-        """Add a conversation turn"""
         turn = ConversationTurn(role, content)
         self.turns.append(turn)
         self.last_accessed = datetime.utcnow()
     
     def get_recent_turns(self, n: int = None) -> List[Dict]:
-        """Get the N most recent turns"""
         if n is None:
             n = settings.max_conversation_turns
         return [turn.to_dict() for turn in self.turns[-n:]]
     
     def get_all_turns(self) -> List[Dict]:
-        """Get all conversation turns"""
         return [turn.to_dict() for turn in self.turns]
     
     def needs_summarization(self) -> bool:
-        """Check if conversation needs summarization"""
         return len(self.turns) > settings.max_conversation_turns and self.summary is None
     
     def set_summary(self, summary: str):
-        """Set conversation summary"""
         self.summary = summary
         logger.info(f"Summary set for session {self.session_id}")
     
     def get_context_for_llm(self) -> str:
-        """
-        Get formatted context for LLM with better structure
-        
-        Returns conversation history as a formatted string.
-        If conversation is long, returns summary + recent turns.
-        """
+        """Get formatted context for LLM"""
         if not self.turns:
             return "No previous conversation."
         
-        # Short conversation: return all turns
         if len(self.turns) <= settings.max_conversation_turns:
             return self._format_turns(self.turns)
         
-        # Long conversation: return summary + recent turns
         if self.summary:
-            recent_turns = self.turns[-4:]  # Last 4 turns for more context
+            recent_turns = self.turns[-4:]
             context = f"Previous conversation summary:\n{self.summary}\n\n"
             context += "Recent conversation:\n"
             context += self._format_turns(recent_turns)
             return context
         else:
-            # No summary yet, return recent turns only
             recent_turns = self.turns[-settings.max_conversation_turns:]
             return self._format_turns(recent_turns)
     
     def get_conversation_for_query_rewrite(self) -> List[Dict]:
-        """
-        Get conversation history for query rewriting
-        Returns last N turns as list of dicts
-        """
         recent_turns = self.turns[-5:] if len(self.turns) >= 5 else self.turns
         return [turn.to_dict() for turn in recent_turns]
     
     def _format_turns(self, turns: List[ConversationTurn]) -> str:
-        """Format turns as readable text"""
         formatted = []
         for turn in turns:
             prefix = "Vendor" if turn.role == "user" else "Assistant"
@@ -108,27 +89,21 @@ class SessionMemory:
         return "\n".join(formatted)
     
     def get_turns_for_summarization(self) -> str:
-        """Get turns to summarize (exclude the most recent ones)"""
-        # Summarize all but the last 3 turns
         turns_to_summarize = self.turns[:-3] if len(self.turns) > 3 else self.turns
         return self._format_turns(turns_to_summarize)
     
     def cache_retrieved_chunks(self, chunks: List[Dict], query: str):
-        """Cache retrieved chunks from the current turn for potential reuse"""
         self.last_retrieved_chunks = chunks
         self.last_query = query
         logger.info(f"Cached {len(chunks)} chunks for session {self.session_id}")
     
     def get_cached_chunks(self) -> List[Dict]:
-        """Get cached chunks from previous turn"""
         return self.last_retrieved_chunks
     
     def has_cached_chunks(self) -> bool:
-        """Check if there are cached chunks available"""
         return len(self.last_retrieved_chunks) > 0
     
     def get_last_query(self) -> Optional[str]:
-        """Get the last query that was processed"""
         return self.last_query
 
 
@@ -140,15 +115,6 @@ class MemoryManager:
         logger.info("Memory manager initialized")
     
     def get_session(self, session_id: str) -> SessionMemory:
-        """
-        Get or create a session
-        
-        Args:
-            session_id: Session identifier
-            
-        Returns:
-            SessionMemory instance
-        """
         if session_id not in self.sessions:
             logger.info(f"Creating new session: {session_id}")
             self.sessions[session_id] = SessionMemory(session_id)
@@ -158,71 +124,59 @@ class MemoryManager:
         return self.sessions[session_id]
     
     def add_user_message(self, session_id: str, message: str):
-        """Add user message to session"""
         session = self.get_session(session_id)
         session.add_turn("user", message)
     
     def add_assistant_message(self, session_id: str, message: str):
-        """Add assistant message to session"""
         session = self.get_session(session_id)
         session.add_turn("assistant", message)
     
     def get_context(self, session_id: str) -> str:
-        """Get formatted conversation context for LLM"""
         session = self.get_session(session_id)
         return session.get_context_for_llm()
     
     def get_conversation_for_query_rewrite(self, session_id: str) -> List[Dict]:
-        """Get conversation history for query rewriting"""
         if session_id not in self.sessions:
             return []
         session = self.get_session(session_id)
         return session.get_conversation_for_query_rewrite()
     
     def needs_summarization(self, session_id: str) -> bool:
-        """Check if session needs summarization"""
         if session_id not in self.sessions:
             return False
         return self.sessions[session_id].needs_summarization()
     
     def set_summary(self, session_id: str, summary: str):
-        """Set summary for session"""
         session = self.get_session(session_id)
         session.set_summary(summary)
     
     def get_turns_for_summarization(self, session_id: str) -> str:
-        """Get conversation turns that need summarization"""
         session = self.get_session(session_id)
         return session.get_turns_for_summarization()
     
     def cache_retrieved_chunks(self, session_id: str, chunks: List[Dict], query: str):
-        """Cache retrieved chunks for a session"""
         session = self.get_session(session_id)
         session.cache_retrieved_chunks(chunks, query)
     
     def get_cached_chunks(self, session_id: str) -> List[Dict]:
-        """Get cached chunks from previous turn"""
         if session_id not in self.sessions:
             return []
         session = self.get_session(session_id)
         return session.get_cached_chunks()
     
     def has_cached_chunks(self, session_id: str) -> bool:
-        """Check if session has cached chunks"""
         if session_id not in self.sessions:
             return False
         session = self.get_session(session_id)
         return session.has_cached_chunks()
     
     def get_last_query(self, session_id: str) -> Optional[str]:
-        """Get the last query for a session"""
         if session_id not in self.sessions:
             return None
         session = self.get_session(session_id)
         return session.get_last_query()
     
     def get_session_stats(self, session_id: str) -> Dict:
-        """Get statistics about a session"""
         if session_id not in self.sessions:
             return {"exists": False}
         
@@ -236,7 +190,6 @@ class MemoryManager:
         }
     
     def clear_session(self, session_id: str) -> bool:
-        """Clear a session"""
         if session_id in self.sessions:
             del self.sessions[session_id]
             logger.info(f"Session cleared: {session_id}")
@@ -244,11 +197,9 @@ class MemoryManager:
         return False
     
     def get_all_sessions(self) -> List[str]:
-        """Get list of all session IDs"""
         return list(self.sessions.keys())
     
     def cleanup_old_sessions(self, hours: int = 24):
-        """Remove sessions older than specified hours"""
         from datetime import timedelta
         
         now = datetime.utcnow()
@@ -266,12 +217,10 @@ class MemoryManager:
         return len(sessions_to_remove)
 
 
-# Global memory manager instance
 _memory_manager = None
 
 
 def get_memory_manager() -> MemoryManager:
-    """Get or create the global memory manager instance"""
     global _memory_manager
     if _memory_manager is None:
         _memory_manager = MemoryManager()
@@ -279,5 +228,4 @@ def get_memory_manager() -> MemoryManager:
 
 
 def generate_session_id() -> str:
-    """Generate a new session ID"""
     return str(uuid.uuid4())
