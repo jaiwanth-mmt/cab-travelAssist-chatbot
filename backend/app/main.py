@@ -17,12 +17,9 @@ from backend.app import __version__
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown events"""
-    # Startup
     app_logger.info("Starting Travel Assist Chatbot API")
     app_logger.info(f"Version: {__version__}")
     
-    # Pre-load embedding model to avoid cold start
     try:
         app_logger.info("Pre-loading embedding model...")
         embedding_service = get_embedding_service()
@@ -32,11 +29,9 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown
     app_logger.info("Shutting down Travel Assist Chatbot API")
 
 
-# Create FastAPI app
 app = FastAPI(
     title="MakeMyTrip Cab Vendor Travel Assist Chatbot",
     description="A RAG-based chatbot to help cab vendors integrate with the MakeMyTrip platform",
@@ -48,23 +43,19 @@ app = FastAPI(
 )
 
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests"""
     start_time = time.time()
     
-    # Log request
     api_logger.info(
         f"Request: {request.method} {request.url.path}",
         extra={
@@ -74,10 +65,8 @@ async def log_requests(request: Request, call_next):
         }
     )
     
-    # Process request
     response = await call_next(request)
     
-    # Log response
     duration = (time.time() - start_time) * 1000
     api_logger.info(
         f"Response: {response.status_code} ({duration:.2f}ms)",
@@ -90,10 +79,8 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# Exception handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors"""
     api_logger.warning(f"Validation error: {exc.errors()}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -107,7 +94,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions"""
     api_logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -119,7 +105,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Health check endpoint
 @app.get(
     "/health",
     response_model=HealthResponse,
@@ -128,17 +113,14 @@ async def general_exception_handler(request: Request, exc: Exception):
     tags=["Health"]
 )
 async def health_check():
-    """Health check endpoint"""
     services = {}
     
-    # Check embedding service
     try:
         embedding_service = get_embedding_service()
         services["embeddings"] = "ok"
     except Exception as e:
         services["embeddings"] = f"error: {str(e)}"
     
-    # Check vector store
     try:
         from backend.app.services.vector_store import get_vector_store
         vector_store = get_vector_store()
@@ -147,7 +129,6 @@ async def health_check():
     except Exception as e:
         services["vector_store"] = f"error: {str(e)}"
     
-    # Check LLM service
     try:
         from backend.app.services.llm import get_llm_service
         llm_service = get_llm_service()
@@ -155,7 +136,6 @@ async def health_check():
     except Exception as e:
         services["llm"] = f"error: {str(e)}"
     
-    # Overall status
     overall_status = "healthy" if all("ok" in v for v in services.values()) else "degraded"
     
     return HealthResponse(
@@ -165,7 +145,6 @@ async def health_check():
     )
 
 
-# Root endpoint
 @app.get(
     "/",
     summary="API Information",
@@ -173,7 +152,6 @@ async def health_check():
     tags=["Info"]
 )
 async def root():
-    """Root endpoint with API information"""
     return {
         "name": "MakeMyTrip Cab Vendor Travel Assist Chatbot",
         "version": __version__,
@@ -187,7 +165,6 @@ async def root():
     }
 
 
-# Include routers
 app.include_router(chat.router, tags=["Chat"])
 app.include_router(ingest.router, tags=["Ingestion"])
 

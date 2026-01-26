@@ -17,13 +17,12 @@ from backend.app.services.memory import get_memory_manager
 from backend.app.services.llm import get_llm_service
 from backend.app.utils.logger import api_logger, log_query_metrics
 from backend.app.core.config import settings
-from backend.app.core.prompts import NO_RELEVANT_CONTEXT_MESSAGE
+from backend.app.core.prompts import NO_RELEVANT_CONTEXT_MESSAGE, CONVERSATIONAL_RESPONSES
 
 router = APIRouter()
 
 
 def determine_confidence(avg_similarity: float, num_chunks: int) -> ConfidenceLevel:
-    """Determine confidence level based on retrieval metrics"""
     if num_chunks == 0 or avg_similarity < settings.similarity_threshold:
         return ConfidenceLevel.NONE
     elif avg_similarity >= 0.78:
@@ -47,41 +46,20 @@ def determine_confidence(avg_similarity: float, num_chunks: int) -> ConfidenceLe
     }
 )
 async def chat(request: ChatRequest) -> ChatResponse:
-    """
-    Process a chat query with enhanced RAG pipeline
-    
-    This endpoint implements:
-    1. Query preprocessing and enhancement
-    2. Conversation memory retrieval
-    3. Hybrid semantic + keyword search
-    4. Advanced re-ranking
-    5. LLM generation with improved prompts
-    6. Memory updates with summarization
-    
-    Args:
-        request: ChatRequest with session_id and user_query
-        
-    Returns:
-        ChatResponse with answer, sources, and metadata
-    """
+    """Process a chat query with enhanced RAG pipeline"""
     api_logger.info(f"Chat request: session={request.session_id}, query={request.user_query[:100]}")
     start_time = time.time()
     
     try:
-        # Step 1: Get services
         query_preprocessor = get_query_preprocessor()
         hybrid_search = get_hybrid_search_service()
         reranker = get_reranker()
         memory_manager = get_memory_manager()
         llm_service = get_llm_service()
         
-        # Step 2: Add user message to memory
         memory_manager.add_user_message(request.session_id, request.user_query)
-        
-        # Step 3: Get conversation history for query preprocessing
         conversation_history = memory_manager.get_conversation_for_query_rewrite(request.session_id)
         
-        # Step 4: Preprocess query
         api_logger.info("Preprocessing query")
         query_info = query_preprocessor.preprocess(
             query=request.user_query,
@@ -91,10 +69,32 @@ async def chat(request: ChatRequest) -> ChatResponse:
         processed_query = query_info["processed_query"]
         intent = query_info["intent"]
         is_meta_query = query_info.get("is_meta_query", False)
+        is_conversational = query_info.get("is_conversational", False)
+        conversation_type = query_info.get("conversation_type")
+        
+        if is_conversational:
+            api_logger.info(f"Conversational query detected: {conversation_type}")
+            response_text = CONVERSATIONAL_RESPONSES.get(
+                conversation_type,
+                "Hello! I'm here to help you with MakeMyTrip cab vendor integration. How can I assist you today?"
+            )
+            memory_manager.add_assistant_message(request.session_id, response_text)
+            latency = (time.time() - start_time) * 1000
+            
+            return ChatResponse(
+                session_id=request.session_id,
+                answer=response_text,
+                sources=[],
+                confidence=ConfidenceLevel.HIGH,
+                metadata=ChatMetadata(
+                    retrieved_chunks=0,
+                    avg_similarity=1.0,
+                    latency_ms=round(latency, 2)
+                )
+            )
         
         api_logger.info(f"Query intent: {intent}, is_meta: {is_meta_query}, processed: {processed_query[:100]}")
         
-        # Step 5: Check if this is a meta-query and we have cached chunks
         retrieved_chunks = []
         used_cache = False
         
@@ -103,7 +103,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
             retrieved_chunks = memory_manager.get_cached_chunks(request.session_id)
             used_cache = True
         else:
-            # Step 5a: Hybrid search with re-ranking
             api_logger.info("Performing hybrid search")
             retrieved_chunks = hybrid_search.search(
                 query=processed_query,
@@ -111,7 +110,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 top_k=settings.top_k_results
             )
             
-            # Step 6: Apply re-ranking
             if retrieved_chunks:
                 api_logger.info("Applying re-ranking")
                 retrieved_chunks = reranker.rerank(
@@ -120,16 +118,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     ensure_diversity=True
                 )
         
-        # Step 7: Check if we have relevant results
         if not retrieved_chunks:
             api_logger.warning("No relevant chunks found after hybrid search and re-ranking")
-            
-            # Add assistant response to memory
             memory_manager.add_assistant_message(request.session_id, NO_RELEVANT_CONTEXT_MESSAGE)
-            
             latency = (time.time() - start_time) * 1000
             
-            # Log metrics
             log_query_metrics(
                 api_logger,
                 session_id=request.session_id,
@@ -152,44 +145,33 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 )
             )
         
-        # Calculate average hybrid score
         avg_similarity = sum(chunk.get('hybrid_score', chunk.get('score', 0)) for chunk in retrieved_chunks) / len(retrieved_chunks)
         api_logger.info(f"Retrieved {len(retrieved_chunks)} chunks, avg hybrid score: {avg_similarity:.3f}")
         
-        # Step 8: Get conversation memory context
         memory_context = memory_manager.get_context(request.session_id)
         
-        # Step 9: Check if we need to summarize
         if memory_manager.needs_summarization(request.session_id):
             api_logger.info("Conversation needs summarization")
             turns_to_summarize = memory_manager.get_turns_for_summarization(request.session_id)
             summary = await llm_service.summarize_conversation(turns_to_summarize)
             memory_manager.set_summary(request.session_id, summary)
-            # Refresh memory context after summarization
             memory_context = memory_manager.get_context(request.session_id)
         
-        # Step 10: Generate answer using LLM
         api_logger.info("Generating answer with LLM")
         answer, sources = await llm_service.generate_answer(
-            query=request.user_query,  # Use original query for LLM
+            query=request.user_query,
             context=retrieved_chunks,
             memory=memory_context
         )
         
-        # Step 11: Add assistant response to memory
         memory_manager.add_assistant_message(request.session_id, answer)
         
-        # Step 12: Cache retrieved chunks for potential follow-up meta-queries
         if not used_cache:
             memory_manager.cache_retrieved_chunks(request.session_id, retrieved_chunks, request.user_query)
         
-        # Step 13: Determine confidence
         confidence = determine_confidence(avg_similarity, len(retrieved_chunks))
-        
-        # Calculate total latency
         latency = (time.time() - start_time) * 1000
         
-        # Log metrics
         log_query_metrics(
             api_logger,
             session_id=request.session_id,
@@ -233,7 +215,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
     description="Retrieve information about a conversation session"
 )
 async def get_session_info(session_id: str):
-    """Get session statistics and information"""
     try:
         memory_manager = get_memory_manager()
         stats = memory_manager.get_session_stats(session_id)
@@ -255,7 +236,6 @@ async def get_session_info(session_id: str):
     description="Clear conversation history for a session"
 )
 async def clear_session(session_id: str):
-    """Clear a conversation session"""
     try:
         memory_manager = get_memory_manager()
         success = memory_manager.clear_session(session_id)

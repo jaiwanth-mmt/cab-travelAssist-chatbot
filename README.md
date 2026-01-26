@@ -1,321 +1,134 @@
 # MakeMyTrip Cab Vendor Travel Assist Chatbot
 
-A production-grade, intelligent RAG chatbot that helps cab vendors integrate with the MakeMyTrip platform by providing accurate, contextual, and comprehensive responses from official documentation.
-
-## ✨ Latest Updates (January 2026)
-
-**Version 2.0** - Complete system enhancement with state-of-the-art RAG improvements:
-- ✅ **Semantic Chunking**: Preserves document structure, code blocks, and API formats
-- ✅ **Hybrid Search**: 85-95% answer accuracy with multi-signal retrieval
-- ✅ **Query Enhancement**: Intent detection, expansion, and follow-up rewriting  
-- ✅ **Conversational Memory**: Full context awareness across conversation
-- ✅ **Enhanced Prompts**: Comprehensive LLM instructions for accurate responses
-- ✅ **Code Preservation**: 95%+ code block integrity
-
-📚 **[Read Complete Enhancement Summary →](COMPLETION_SUMMARY.md)**
+A production-grade RAG chatbot that helps cab vendors integrate with the MakeMyTrip platform by providing accurate, contextual responses from official documentation.
 
 ## Features
 
-### Core Capabilities
 - **Advanced RAG Pipeline**: Hybrid search with semantic, keyword, and metadata signals
-- **Semantic Understanding**: Powered by Sentence Transformers with enhanced chunking
-- **Conversational Memory**: Context-aware with automatic summarization (6+ turns)
-- **Query Processing**: Intent detection, entity extraction, follow-up rewriting
-- **Re-ranking**: Deduplication and diversity enforcement for optimal results
-- **Anti-Hallucination**: Multi-layer grounding with strict prompt engineering
-- **Code Preservation**: Special handling for API formats, JSON, and code blocks
-- **Production-Ready**: Comprehensive logging, error handling, and monitoring
+- **Semantic Understanding**: Powered by Sentence Transformers with intelligent chunking
+- **Conversational Memory**: Context-aware with automatic summarization
+- **Query Enhancement**: Intent detection, expansion, and follow-up rewriting
+- **Code Preservation**: Special handling for API formats and JSON
+- **Production-Ready**: Comprehensive logging and error handling
 
-### Technical Stack
+## Technical Stack
+
 - **Backend**: FastAPI with async support
 - **Embeddings**: Sentence Transformers (all-MiniLM-L6-v2, 384-dim)
 - **Vector Store**: Pinecone (serverless, cosine similarity)
-- **LLM**: Azure OpenAI GPT-4 (temperature=0.05 for accuracy)
+- **LLM**: Azure OpenAI GPT-4
 - **Memory**: In-memory sessions with summarization
 - **Search**: Hybrid (semantic + keyword + metadata)
-
-## Architecture
-
-```mermaid
-flowchart TD
-    VendorQuery[Vendor Query + session_id] --> FastAPI[FastAPI Backend]
-    FastAPI --> SessionMgr[Session Manager]
-    SessionMgr --> QueryProc[Query Processor]
-    QueryProc --> Embedder[Sentence Transformer]
-    Embedder --> Pinecone[Pinecone Vector Search]
-    Pinecone --> ContextAsm[Context Assembly]
-    ContextAsm --> AzureOAI[Azure OpenAI gpt-4o-mini]
-    AzureOAI --> Response[Grounded Answer + Sources]
-    SessionMgr -.Memory.-> QueryProc
-```
 
 ## Prerequisites
 
 - Python 3.10 or higher
-- Azure OpenAI account with access to gpt-4o-mini
+- Azure OpenAI account
 - Pinecone account (Free tier supported)
 
 ## Quick Start
 
-### 🚨 Important: Migration Required for Version 2.0
-
-If you're upgrading from a previous version, you **must** re-ingest the documentation to benefit from the new semantic chunking:
+### Installation
 
 ```bash
-# Quick migration with automated testing
-chmod +x migrate_and_test.sh
-./migrate_and_test.sh
-
-# Or manual migration
-curl -X POST "http://localhost:8000/api/ingest" \
-  -H "Content-Type: application/json" \
-  -d '{"force_reindex": true}'
-```
-
-📚 **See [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for detailed migration guide**
-
----
-
-### First Time Setup
-
-Get up and running in 5 minutes:
-
-```bash
-# 1. Clone and setup
+# Clone and setup
 git clone <repository-url>
 cd cab-travelAssist-chatbot
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# 2. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 3. Configure environment
+# Configure environment
 cp .env.example .env
-# Edit .env with your Azure OpenAI and Pinecone credentials
+# Edit .env with your credentials
+```
 
-# 4. Start the server
-python -m uvicorn backend.app.main:app --reload --port 8000
+### Configuration
 
-# 5. In another terminal, ingest the documentation
+Create a `.env` file with:
+
+```env
+# Azure OpenAI (REQUIRED)
+AZURE_OPENAI_KEY=your_key_here
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_API_VERSION=2025-01-01-preview
+
+# Pinecone (REQUIRED)
+PINECONE_API_KEY=your_key_here
+PINECONE_ENVIRONMENT=us-east-1
+PINECONE_INDEX_NAME=mmt-cab-docs
+```
+
+### Running the Application
+
+```bash
+# Start the server
+uvicorn backend.app.main:app --reload --port 8000
+
+# In another terminal, ingest documentation
 curl -X POST http://localhost:8000/ingest
 
-# 6. Test the chatbot
+# Test the chatbot
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"session_id": "test-1", "user_query": "How do I call the search API?"}'
 ```
 
-## Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd cab-travelAssist-chatbot
-   ```
-
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys and configuration
-   ```
-
-   Required configuration:
-   - `AZURE_OPENAI_KEY`: Your Azure OpenAI API key
-   - `AZURE_OPENAI_ENDPOINT`: Your Azure OpenAI endpoint URL
-   - `PINECONE_API_KEY`: Your Pinecone API key
-   - `PINECONE_ENVIRONMENT`: Your Pinecone environment (e.g., `gcp-starter`)
-
-5. **Verify installation**
-   ```bash
-   python -c "import fastapi, sentence_transformers, pinecone; print('All dependencies installed!')"
-   ```
-
-## Configuration
-
-Edit the `.env` file with your credentials:
-
-```env
-# Azure OpenAI
-AZURE_OPENAI_KEY=your_azure_key
-AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com
-AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
-AZURE_OPENAI_API_VERSION=2025-01-01-preview
-
-# Pinecone
-PINECONE_API_KEY=your_pinecone_key
-PINECONE_ENVIRONMENT=your_pinecone_env
-PINECONE_INDEX_NAME=mmt-cab-docs
-```
-
-## Usage
-
-### 1. Start the API Server
-
-```bash
-uvicorn backend.app.main:app --reload --port 8000
-```
-
-The API will be available at `http://localhost:8000`
-
-### 2. Ingest Documentation (One-time Setup)
-
-Before using the chatbot, ingest the documentation into the vector store:
-
-```bash
-curl -X POST http://localhost:8000/ingest
-```
-
-This process:
-- Chunks the `documentation.txt` file into semantic segments
-- Generates embeddings using Sentence Transformers
-- Uploads to Pinecone vector store
-
-Expected output:
-```json
-{
-  "status": "success",
-  "chunks_created": 250,
-  "time_taken_seconds": 45.2
-}
-```
-
-### 3. Chat with the Bot
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "session_id": "vendor-session-123",
-    "user_query": "How do I call the search API?"
-  }'
-```
-
-Response:
-```json
-{
-  "session_id": "vendor-session-123",
-  "answer": "The Search API is called by sending a POST request to the partner search endpoint...",
-  "sources": ["Normal Booking Flow - Search", "API Flowchart"],
-  "confidence": "high",
-  "metadata": {
-    "retrieved_chunks": 4,
-    "avg_similarity": 0.82,
-    "latency_ms": 450
-  }
-}
-```
-
-### 4. Interactive API Documentation
-
-Visit `http://localhost:8000/docs` for Swagger UI with interactive API testing.
-
 ## API Endpoints
 
 ### Health Check
-```
+```bash
 GET /health
 ```
 
-### Document Ingestion
-```
+### Ingest Documentation
+```bash
 POST /ingest
+# Optional: Force re-indexing
+POST /ingest -d '{"force_reindex": true}'
 ```
-One-time ingestion of documentation into the vector store.
 
 ### Chat
-```
+```bash
 POST /chat
-```
-Main chatbot endpoint for vendor queries.
-
-**Request:**
-```json
 {
   "session_id": "string",
   "user_query": "string"
 }
 ```
 
-**Response:**
-```json
-{
-  "session_id": "string",
-  "answer": "string",
-  "sources": ["string"],
-  "confidence": "high|medium|low|none",
-  "metadata": {
-    "retrieved_chunks": 0,
-    "avg_similarity": 0.0,
-    "latency_ms": 0
-  }
-}
+### Session Management
+```bash
+GET /session/{session_id}
+DELETE /session/{session_id}
 ```
 
 ## Example Queries
 
-The chatbot can answer questions like:
+```bash
+# API usage
+"How do I call the search API?"
+"What are the mandatory fields in the Block API?"
 
-### Onboarding & Setup
-- "How do I onboard as a cab vendor?"
-- "What authentication method should I use?"
-- "What is the base URL for the API?"
+# Booking flow
+"Explain the normal booking flow"
+"What happens after a customer selects a cab?"
 
-### API Usage
-- "What are the mandatory fields in the Search API?"
-- "How do I call the Block API?"
-- "What is the difference between Block and Paid API?"
-- "What are the post-booking APIs I need to implement?"
+# Error handling
+"How do I handle trip cancellation?"
+"What should I do if a customer doesn't board?"
 
-### Booking Flow
-- "Explain the normal booking flow"
-- "What happens after a customer selects a cab?"
-- "What is the timeframe between block and confirm?"
+# Follow-up questions (maintains context)
+"Tell me about the Search API"
+"What are the mandatory parameters?"
+```
 
-### Error Handling & Edge Cases
-- "How do I handle trip cancellation?"
-- "What should I do if a customer doesn't board?"
-- "How do I update driver location?"
+## Interactive Documentation
 
-### Follow-up Questions
-The chatbot maintains conversation context, so you can ask follow-up questions:
-- User: "Tell me about the Search API"
-- Bot: [Explains Search API]
-- User: "What are the mandatory parameters?"
-- Bot: [Lists mandatory parameters for Search API from context]
-
-## Features in Detail
-
-### Anti-Hallucination Controls
-
-1. **Strict System Prompt**: Instructs the LLM to answer only from provided context
-2. **Similarity Threshold**: Filters out irrelevant chunks (threshold: 0.65)
-3. **Source Citation**: Every answer includes source sections from documentation
-4. **Graceful Refusal**: Out-of-scope questions receive polite refusal
-
-### Session Memory
-
-- Maintains conversation history per session
-- Automatically summarizes long conversations (>5 turns)
-- Enables natural follow-up questions ("What about that API?")
-
-### Semantic Understanding
-
-Handles synonyms and paraphrasing:
-- "cancel ride" ≈ "trip cancellation"
-- "callback" ≈ "webhook"
-- "driver update" ≈ "status notification"
+Visit `http://localhost:8000/docs` for Swagger UI with interactive API testing.
 
 ## Project Structure
 
@@ -325,156 +138,77 @@ cab-travelAssist-chatbot/
 │   ├── app/
 │   │   ├── main.py              # FastAPI application
 │   │   ├── api/                 # API endpoints
-│   │   ├── core/                # Configuration
+│   │   ├── core/                # Configuration & prompts
 │   │   ├── services/            # Business logic
 │   │   ├── models/              # Pydantic models
 │   │   └── utils/               # Utilities
 │   └── tests/                   # Test suite
 ├── documentation.txt            # Knowledge base
-├── requirements.txt             # Dependencies
-└── .env                         # Configuration
+├── requirements.txt
+└── .env
 ```
 
 ## Development
 
 ### Running Tests
 
-Run the test suite:
-
 ```bash
-# Run all tests
 pytest backend/tests/ -v
-
-# Run specific test file
-pytest backend/tests/test_chunker.py -v
-
-# Run with coverage
-pytest backend/tests/ --cov=backend.app --cov-report=html
-
-# Run only fast tests (skip integration tests)
-pytest backend/tests/ -v -m "not slow"
+pytest backend/tests/ --cov=backend.app
 ```
 
 ### Code Quality
 
-The codebase follows best practices:
-- **Type Hints**: Full type annotations throughout for better IDE support
-- **Pydantic Models**: Data validation for all API requests/responses
-- **Structured Logging**: JSON-formatted logs with contextual information
-- **Error Handling**: Comprehensive exception handling with graceful fallbacks
-- **Singleton Patterns**: Efficient resource management for services
-- **Async/Await**: Non-blocking operations where appropriate
-
-### Project Guidelines
-
-- Follow PEP 8 style guide
-- Use descriptive variable and function names
-- Add docstrings to all public functions
-- Keep functions focused and under 50 lines when possible
-- Write tests for new features
-- Update README when adding new features
-
-### Adding New Features
-
-1. **New Service**: Add to `backend/app/services/`
-2. **New Endpoint**: Add to `backend/app/api/`
-3. **New Model**: Add to `backend/app/models/`
-4. **Configuration**: Update `backend/app/core/config.py` and `.env.example`
-5. **Tests**: Add tests to `backend/tests/`
-6. **Documentation**: Update this README
-
-## Monitoring
-
-Key metrics logged:
-- Query retrieval accuracy (similarity scores)
-- Response latency
-- Session engagement
-- Out-of-scope query rate
-
-Logs are structured for easy parsing and monitoring.
+- Type hints throughout
+- Pydantic models for validation
+- Structured logging
+- Comprehensive error handling
 
 ## Troubleshooting
 
 ### "No relevant chunks found"
-- Ensure ingestion completed successfully: `curl http://localhost:8000/ingest/status`
-- Check if query is related to cab integration (out-of-scope queries will return this message)
-- Try rephrasing the question with specific API names or keywords
-
-### Low similarity scores / Confidence: "low"
-- Question may be out of scope for the documentation
-- Try being more specific (e.g., "Search API mandatory fields" vs "API fields")
-- Include relevant keywords (API names, workflow terms like "booking", "block", "paid")
+- Ensure ingestion completed: `curl http://localhost:8000/ingest/status`
+- Try rephrasing with specific API names
 
 ### Azure OpenAI errors
-- Verify API key and endpoint in `.env` file
-- Check deployment name matches configuration (`gpt-4o-mini`)
-- Ensure quota is not exceeded in Azure portal
-- Check API version matches: `2025-01-01-preview`
+- Verify credentials in `.env`
+- Check deployment name matches configuration
+- Ensure quota is available
 
 ### Pinecone errors
-- Verify API key and environment in `.env`
-- Ensure index exists (created automatically during first ingestion)
-- Check network connectivity to Pinecone
-- Try deleting and recreating the index with `force_reindex=true`
+- Verify API key and environment
+- Try deleting and recreating index with `force_reindex=true`
 
 ### Module import errors
-- Ensure you're running commands from the project root directory
-- Check that virtual environment is activated
-- Verify all dependencies are installed: `pip install -r requirements.txt`
-
-### Slow response times
-- First query after startup is slower (model loading)
-- Check Pinecone latency (should be <100ms)
-- Check Azure OpenAI latency (should be <1s)
-- Review logs for bottlenecks: `grep "latency_ms" logs/`
+- Run commands from project root
+- Ensure virtual environment is activated
+- Verify all dependencies: `pip install -r requirements.txt`
 
 ## Production Considerations
 
-For production deployment, consider these enhancements:
+### Security
+- Implement API authentication (JWT/API keys)
+- Add rate limiting
+- Restrict CORS origins
+- Use secrets manager for credentials
 
 ### Infrastructure
-- **Redis for Session Storage**: Replace in-memory session storage with Redis for persistence
-- **Load Balancing**: Deploy multiple instances behind a load balancer
-- **HTTPS**: Use TLS/SSL certificates for secure communication
-- **CDN**: Cache static assets if adding a frontend
+- Use Redis for session storage
+- Deploy behind load balancer
+- Enable HTTPS
+- Set up health check monitoring
 
-### Security
-- **API Authentication**: Implement JWT or API key-based authentication
-- **Rate Limiting**: Add rate limiting per vendor/session
-- **CORS**: Restrict `allow_origins` to specific domains
-- **Input Validation**: Additional sanitization for user queries
-- **Secrets Management**: Use Azure Key Vault or AWS Secrets Manager
-
-### Monitoring & Observability
-- **Application Monitoring**: Integrate with Datadog, New Relic, or Application Insights
-- **Log Aggregation**: Use ELK stack or CloudWatch for centralized logging
-- **Metrics Tracking**:
-  - Query volume and latency
-  - Retrieval accuracy (similarity scores)
-  - Hallucination rate (manual sampling)
-  - Session engagement metrics
-- **Alerting**: Set up alerts for:
-  - High error rates
-  - Slow response times (>3s)
-  - Service failures (Pinecone, Azure OpenAI)
+### Monitoring
+- Application monitoring (Datadog, New Relic)
+- Log aggregation (ELK stack, CloudWatch)
+- Track metrics: latency, accuracy, error rates
+- Set up alerts for failures
 
 ### Performance
-- **Caching**: Cache frequent queries and responses
-- **Async Processing**: Batch processing for multiple sessions
-- **Model Optimization**: Consider quantized models for faster inference
-- **Connection Pooling**: Reuse connections to Pinecone and Azure
-
-### Reliability
-- **Retry Logic**: Exponential backoff for transient failures
-- **Circuit Breakers**: Prevent cascade failures
-- **Graceful Degradation**: Fallback responses when services are down
-- **Health Checks**: Kubernetes-ready health endpoints
-
-### Maintenance
-- **Automated Re-ingestion**: Webhook or scheduled job when documentation updates
-- **Version Control**: Track documentation versions and embeddings
-- **A/B Testing**: Compare different chunking strategies or prompts
-- **Feedback Loop**: Collect user feedback (thumbs up/down) for quality improvement
+- Cache frequent queries
+- Use connection pooling
+- Consider quantized models for faster inference
+- Batch processing for multiple sessions
 
 ## License
 
@@ -482,4 +216,4 @@ For production deployment, consider these enhancements:
 
 ## Support
 
-For issues or questions, contact [Your Contact Information]
+For issues or questions, see the API documentation or contact the development team.

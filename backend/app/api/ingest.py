@@ -19,41 +19,25 @@ router = APIRouter()
     response_model=IngestResponse,
     status_code=status.HTTP_200_OK,
     summary="Ingest documentation into vector store",
-    description="Process and ingest the documentation file into the Pinecone vector store. This is a one-time operation that should be run before using the chatbot.",
+    description="Process and ingest the documentation file into the Pinecone vector store.",
     responses={
         200: {"description": "Ingestion completed successfully"},
         500: {"description": "Internal server error during ingestion", "model": ErrorResponse}
     }
 )
 async def ingest_documentation(request: IngestRequest = IngestRequest()):
-    """
-    Ingest documentation into vector store
-    
-    This endpoint:
-    1. Reads the documentation.txt file
-    2. Chunks it into semantic segments
-    3. Generates embeddings for each chunk
-    4. Uploads to Pinecone vector store
-    
-    Args:
-        request: Optional request body with ingestion options
-        
-    Returns:
-        IngestResponse with statistics
-    """
+    """Ingest documentation into vector store"""
     api_logger.info("Starting documentation ingestion")
     start_time = time.time()
     
     try:
-        # Check if we should delete existing vectors
         vector_store = get_vector_store()
         
         if request.force_reindex:
             api_logger.info("Force reindex requested, clearing existing vectors")
             vector_store.delete_all()
-            time.sleep(2)  # Wait for deletion to complete
+            time.sleep(2)
         else:
-            # Check if index already has data
             stats = vector_store.get_stats()
             if stats.get('total_vectors', 0) > 0:
                 api_logger.warning("Index already contains vectors. Use force_reindex=true to re-ingest")
@@ -67,7 +51,6 @@ async def ingest_documentation(request: IngestRequest = IngestRequest()):
                     message=f"Index already contains {stats['total_vectors']} vectors. Use force_reindex=true to re-ingest."
                 )
         
-        # Step 1: Chunk the documentation
         api_logger.info(f"Chunking documentation: {settings.documentation_path}")
         chunks = chunk_documentation()
         
@@ -76,14 +59,11 @@ async def ingest_documentation(request: IngestRequest = IngestRequest()):
         
         api_logger.info(f"Created {len(chunks)} chunks")
         
-        # Step 2: Upload to vector store (embeddings are generated inside)
         api_logger.info("Uploading chunks to vector store")
         upsert_result = vector_store.upsert_chunks(chunks)
         
-        # Calculate total time
         total_time = time.time() - start_time
         
-        # Log metrics
         log_ingestion_metrics(
             api_logger,
             total_chunks=len(chunks),
@@ -136,7 +116,6 @@ async def ingest_documentation(request: IngestRequest = IngestRequest()):
     description="Get the current status of the vector store"
 )
 async def get_ingestion_status():
-    """Get vector store statistics"""
     try:
         vector_store = get_vector_store()
         stats = vector_store.get_stats()
