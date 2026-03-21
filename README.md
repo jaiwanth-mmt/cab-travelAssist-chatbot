@@ -41,8 +41,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Configure environment
-cp .env.example .env
-# Edit .env with your credentials
+# Create a .env file in the project root and add your credentials (see Configuration section below)
 ```
 
 ### Configuration
@@ -89,6 +88,9 @@ GET /health
 POST /ingest
 # Optional: Force re-indexing
 POST /ingest -d '{"force_reindex": true}'
+
+# Check ingestion status
+GET /ingest/status
 ```
 
 ### Chat
@@ -135,27 +137,34 @@ Visit `http://localhost:8000/docs` for Swagger UI with interactive API testing.
 ```
 cab-travelAssist-chatbot/
 ├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI application
-│   │   ├── api/                 # API endpoints
-│   │   ├── core/                # Configuration & prompts
-│   │   ├── services/            # Business logic
-│   │   ├── models/              # Pydantic models
-│   │   └── utils/               # Utilities
-│   └── tests/                   # Test suite
+│   └── app/
+│       ├── main.py              # FastAPI application
+│       ├── api/                 # API endpoints
+│       │   ├── chat.py          # Chat endpoint
+│       │   └── ingest.py        # Ingestion endpoint
+│       ├── core/                # Configuration & prompts
+│       │   ├── config.py        # Settings & config
+│       │   └── prompts.py       # LLM prompts
+│       ├── services/            # Business logic
+│       │   ├── chunker.py       # Document chunking
+│       │   ├── embeddings.py    # Embedding generation
+│       │   ├── hybrid_search.py # Hybrid search & reranking
+│       │   ├── llm.py           # LLM integration
+│       │   ├── memory.py        # Conversation memory
+│       │   ├── query_processor.py # Query preprocessing
+│       │   └── vector_store.py  # Pinecone integration
+│       ├── models/              # Pydantic models
+│       │   ├── requests.py      # Request models
+│       │   └── responses.py     # Response models
+│       └── utils/               # Utilities
+│           └── logger.py        # Logging setup
 ├── documentation.txt            # Knowledge base
-├── requirements.txt
-└── .env
+├── requirements.txt             # Python dependencies
+├── .env                         # Environment variables (create this)
+└── README.md
 ```
 
 ## Development
-
-### Running Tests
-
-```bash
-pytest backend/tests/ -v
-pytest backend/tests/ --cov=backend.app
-```
 
 ### Code Quality
 
@@ -164,25 +173,42 @@ pytest backend/tests/ --cov=backend.app
 - Structured logging
 - Comprehensive error handling
 
+### Testing
+
+Tests can be added using pytest:
+
+```bash
+pip install pytest pytest-cov httpx
+pytest --cov=backend.app
+```
+
 ## Troubleshooting
 
 ### "No relevant chunks found"
 - Ensure ingestion completed: `curl http://localhost:8000/ingest/status`
+- Check if vectors exist in the index
 - Try rephrasing with specific API names
 
 ### Azure OpenAI errors
 - Verify credentials in `.env`
 - Check deployment name matches configuration
 - Ensure quota is available
+- Verify API version is correct
 
 ### Pinecone errors
 - Verify API key and environment
 - Try deleting and recreating index with `force_reindex=true`
+- Check Pinecone dashboard for index status
 
 ### Module import errors
 - Run commands from project root
 - Ensure virtual environment is activated
 - Verify all dependencies: `pip install -r requirements.txt`
+
+### Connection errors
+- Check if services (Azure OpenAI, Pinecone) are accessible
+- Verify network connectivity
+- Check firewall settings
 
 ## Production Considerations
 
